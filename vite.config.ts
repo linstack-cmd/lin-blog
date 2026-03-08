@@ -6,7 +6,7 @@ import flowCSS from "@flow-css/vite";
 export default defineConfig({
   plugins: [
     mdx({ providerImportSource: undefined }),
-    vike({}),
+    vike({ prerender: true }),
     flowCSS(),
   ],
 });
