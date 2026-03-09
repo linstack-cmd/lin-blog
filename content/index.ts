@@ -10,8 +10,9 @@ interface PostMeta {
 
 // Import meta from each post
 import { meta as subagentTiming } from "./posts/subagent-timing-problem.mdx";
+import { meta as taskResumptionHardening } from "./posts/task-resumption-hardening.mdx";
 
-export const posts: PostMeta[] = [subagentTiming].sort(
+export const posts: PostMeta[] = [subagentTiming, taskResumptionHardening].sort(
   (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
 );
 

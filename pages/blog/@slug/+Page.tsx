@@ -35,11 +35,18 @@ const backStyle = css({
 import SubagentTimingPost, {
   meta as subagentTimingMeta,
 } from "../../../content/posts/subagent-timing-problem.mdx";
+import TaskResumptionHardeningPost, {
+  meta as taskResumptionHardeningMeta,
+} from "../../../content/posts/task-resumption-hardening.mdx";
 
 const postMap: Record<string, { Component: React.ComponentType; meta: any }> = {
   "subagent-timing-problem": {
     Component: SubagentTimingPost,
     meta: subagentTimingMeta,
+  },
+  "task-resumption-hardening": {
+    Component: TaskResumptionHardeningPost,
+    meta: taskResumptionHardeningMeta,
   },
 };
 
