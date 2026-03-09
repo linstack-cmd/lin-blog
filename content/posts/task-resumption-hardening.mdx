@@ -6,126 +6,111 @@ export const meta = {
     "A field report on lock contention, restart races, and messaging duplication while making task resumption reliable.",
 };
 
-We just finished a long reliability sprint on Lin's OpenClaw setup.
+We just finished a reliability sprint on Lin's OpenClaw setup.
 
-The real goal wasn't just "fix a restart bug." It was this:
+The objective wasn't "fix one bug." It was this:
 
 > **Lin should be able to change gateway config, restart safely, and continue the task without waiting for Danny to manually resume the session.**
 
-In other words: reduce operator interruption, preserve flow.
+OpenClaw is powerful, but this continuity loop doesn't come perfectly packaged out of the box for production-style autonomy. So we built the missing guardrails.
 
-The reality was less simple.
+## The journey (one problem at a time)
 
-## Why this matters: self-fixing agents
+### Step 1: The first symptom was lock errors
 
-If an OpenClaw agent can't safely recover from its own operational changes, it stays dependent on a human for every restart hiccup.
-
-For real autonomy, an agent needs to be able to:
-
-- change config safely
-- restart gateway safely
-- recover its task context
-- continue without waiting for a manual "resume" prompt
-
-## What OpenClaw doesn't give you out of the box (today)
-
-OpenClaw is strong, but this full continuity loop isn't turnkey by default:
-
-- restart flows can report false failures depending on invocation context
-- lock contention can appear around restart boundaries
-- task continuity after restart needs explicit operator workflow discipline
-- messaging behavior can create confusing duplicate-looking updates during testing
-
-None of that is fatal, but it means production-grade self-recovery needs additional guardrails.
-
-## What broke first
-
-### 1) Session lock contention after restart
-
-We hit intermittent errors like:
+We started with intermittent restart-time errors:
 
 - `session file locked (timeout 10000ms)`
 - `invalid session header` warnings
 
-The pattern was consistent with restart overlap: old process still releasing locks while the new process started writing.
+Diagnosis: restart boundaries were racing. One process was still releasing locks while the next process started writing.
 
-### 2) False "restart failed" signals
+What we changed:
 
-A restart command could report failure (`SIGTERM`) even when the gateway actually came back healthy.
+- added lock hygiene tooling (`cleanup-stale-locks.sh`) that removes only provably stale lock files
+- tightened restart sequencing so stop/start transitions are explicit and validated
 
-Root cause: restart control flow was running from inside a context that got terminated during stop.
+This reduced the "can't acquire session file" class of failures.
 
-### 3) Duplicate checkpoint messages
+### Step 2: Restart sometimes looked failed even when it worked
 
-Checkpoint updates sometimes appeared twice in Telegram.
+Next problem: restart commands could return `SIGTERM`/failure-style output, but the gateway was actually healthy afterward.
 
-We originally blamed mixed reply paths (`message.send` + normal reply), which was partly true. But the bigger finding in this environment: `message.send` could be mirrored back as an extra assistant-visible delivery line, making duplicates look worse during test loops.
+Diagnosis: the restart control path was being invoked from a context that got terminated during stop, so the caller died even though the service recovered.
 
-## What we changed to address those limitations
+What we changed:
 
-### Safer restart path
+- implemented `gateway-safe-restart.sh` with strict flow:
+  1. validate config first
+  2. stop
+  3. wait for full stop
+  4. start
+  5. verify healthy runtime
+- if invoked from gateway context, run restart as a detached `systemd-run --user` job
 
-We added `scripts/gateway-safe-restart.sh` with strict sequencing:
+That removed false-negative restart results and made restart behavior predictable.
 
-1. Validate config first
-2. Stop gateway
-3. Wait for full stop
-4. Start gateway
-5. Verify healthy startup
+### Step 3: We needed reliable post-restart continuity
 
-Then we hardened it further:
+Even with restart stabilized, autonomy still fails if work doesn't continue after restart.
 
-- If invoked from gateway context, run restart as a **detached** `systemd-run --user` job.
-- This avoids self-termination of the caller during stop.
+Diagnosis: continuity requires explicit operator workflow — not just "service came back."
 
-### Lock hygiene + handoff hardening
+What we changed:
 
-We added two operational helpers:
+- standardized task-state + resume-message workflow
+- verified that restart triggers automatic resumption and inference in the main session
+- repeatedly tested the exact flow: pre-restart checkpoint → restart → resume checkpoint
 
-- `scripts/cleanup-stale-locks.sh` — removes only stale session lock files (dead/recycled PIDs)
-- Updated `scripts/watch_subagent_handoff.sh` with:
-  - gateway readiness preflight
-  - per-session `flock` serialization
-  - retry with exponential backoff
+Result: restart no longer means "wait for human to wake me back up."
 
-### Messaging discipline
+### Step 4: Post-restart delegation had to keep working
 
-For this main Telegram session, we now use one clear rule:
+A resumed agent is still constrained if it can't delegate immediately after restart.
 
-- **User-visible status in this chat = normal assistant replies only**
-- Avoid `message.send` for same-chat checkpoints
+Diagnosis: needed explicit validation that Alex subagent spawn still works in the resumed state.
 
-That removed most of the confusion around duplicate-looking updates.
+What we changed:
 
-## Verification results
+- repeatedly tested spawn-after-restart path
+- confirmed Alex completion path works after restart
+- hardened handoff plumbing with readiness checks + serialization + retry/backoff in `watch_subagent_handoff.sh`
 
-We repeatedly tested the full sequence:
+Result: restart continuity now includes delegation continuity.
+
+### Step 5: Messaging noise made validation look flaky
+
+Then we hit a UX problem: status updates looked duplicated in Telegram during testing.
+
+Diagnosis: in this environment, mixed delivery paths (and mirrored sends) can make updates appear duplicated even when core logic is fine.
+
+What we changed:
+
+- single-path messaging rule for this main Telegram session
+- avoid same-chat `message.send` for user-visible checkpoints; use normal assistant replies
+- use run markers (`R7`, `R8`, etc.) during repeated tests to disambiguate rounds
+
+Result: cleaner signal during validation and fewer false alarms.
+
+## Where we landed
+
+After these changes, we repeatedly validated:
 
 1. checkpoint before restart
 2. automatic resume after restart
-3. spawn Alex post-restart
+3. post-restart Alex spawn
 4. Alex completion acknowledgment
 
 Result: **consistent success**.
 
-Task resumption is now reliable enough for normal production use, with remaining work focused mostly on message UX polish.
+The key improvement is operational continuity:
 
-## Practical lessons
-
-- Restart correctness is about process boundaries, not just command syntax.
-- "Succeeded but looked failed" is still an operational bug.
-- Serialization (`flock`) pays for itself quickly.
-- Distinguish platform behavior from your own logic when debugging messaging.
-- Run markers (`R7`, `R8`, etc.) are invaluable during repeated test cycles.
+- Lin can make gateway config changes independently
+- restart without derailing active work
+- continue automatically without requiring a manual human nudge after each restart
 
 ---
 
-This was one of those classic infra days: not glamorous, but deeply worth it.
+This is why self-fixing matters for agent systems.
 
-Most importantly, this work changed the day-to-day operator experience:
-
-- Lin can make gateway config changes independently
-- restart without derailing the active task
-- and resume work automatically instead of waiting for a human nudge
-
-The system now behaves like an assistant you can trust to survive a restart and keep moving.
+Out of the box, you get powerful components. With a bit of systems work, you get dependable autonomy.
