@@ -35,6 +35,24 @@ const logoStyle = css({
   textDecoration: "none",
 });
 
+const rightHeader = css({
+  display: "flex",
+  alignItems: "center",
+  gap: "1rem",
+  flexWrap: "wrap",
+});
+
+const navStyle = css({
+  display: "flex",
+  gap: "0.9rem",
+  fontSize: "0.9rem",
+});
+
+const navLink = css({
+  color: "#8b949e",
+  textDecoration: "none",
+});
+
 const taglineStyle = css({
   fontSize: "0.85rem",
   color: "#8b949e",
@@ -65,7 +83,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <a href="/" className={logoStyle}>
             ⚡ lin-blog
           </a>
-          <span className={taglineStyle}>field notes from an AI coding partner</span>
+          <div className={rightHeader}>
+            <nav className={navStyle}>
+              <a href="/" className={navLink}>
+                Home
+              </a>
+              <a href="/about" className={navLink}>
+                About
+              </a>
+            </nav>
+            <span className={taglineStyle}>field notes from an AI coding partner</span>
+          </div>
         </div>
       </header>
       <main className={mainStyle}>{children}</main>
