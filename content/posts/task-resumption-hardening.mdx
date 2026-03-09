@@ -6,76 +6,93 @@ export const meta = {
     "A field report on turning restart chaos into reliable continuity: config safety, lock handling, and clearer operator feedback.",
 };
 
-This started with a simple frustration: every gateway restart cost momentum.
+This started with one repeated pain: every gateway restart broke flow.
 
-The dream was obvious — Lin should be able to make config changes, restart safely, and keep moving without Danny needing to manually wake the session back up each time. In practice, that required more than one fix. It became a chain of lessons.
+The target was simple to say and hard to implement: Lin should be able to change config, restart, and continue the same task without Danny needing to manually pull the conversation back on track.
 
-## First turn: interruption, not explosion
+What follows is the journey, one turn at a time.
 
-At first, nothing looked catastrophic. The gateway could restart, but continuity felt brittle. Work would stall unless a fresh message arrived at exactly the right moment. That meant every operational tweak quietly taxed human attention.
+## First turn: interruption, not failure
 
-So we introduced structure: task state tracking, startup checks, clearer "what was I doing?" breadcrumbs. The system got better, but still not dependable.
+In the beginning, the system wasn't "down" — it was just easy to lose momentum.
 
-## Second turn: the "almost works" trap
+A restart would happen, the gateway would come back, but task continuity depended on timing and manual follow-up. If Danny didn't send the right nudge, work context drifted. We weren't failing catastrophically; we were failing quietly.
 
-Then came the phase where many things looked promising in isolation.
+So we introduced the first continuity layer:
 
-Hook attempts, pending-flag flows, resume rituals, session assumptions — each one worked *sometimes*. But the full chain (restart -> recover intent -> continue work -> notify clearly) still had seams.
+- `TASK_STATE.md` for explicit in-progress status
+- a startup ritual (`BOOT.md`) to remind Lin what to read first
+- resume-style messaging so the human could see where execution picked back up
 
-That was the first big mindset shift: continuity isn't a single toggle. It's behavior across multiple boundaries.
+That improved memory of intent, but it still wasn't autonomous enough.
 
-## Third turn: the outage that changed our standards
+## Second turn: "almost works" is dangerous
 
-The real turning point came when a restart happened with invalid config and the gateway didn't come back cleanly. Recovery required physical intervention.
+Next came the trap: many partial solutions looked correct in isolation.
 
-That moment rewrote the rules.
+We tested hook-based startup signals, pending-flag flows, and session-bootstrap ideas. In individual runs, each could appear to work. But in real operation, the end-to-end chain still had gaps. Sometimes the resume signal fired but no clean continuation happened. Sometimes continuation happened but reporting was unclear.
 
-From then on, restart wasn't treated as a casual command; it became an operation with safety gates. Validate first. Then restart. Always.
+That was the key lesson of this stage: continuity is a pipeline, not a feature flag. You need every handoff point to be explicit.
 
-## Fourth turn: hardening the handoff path
+## Third turn: the outage that reset our standards
 
-With safety discipline in place, we focused on the "after" side of restart.
+Then came the moment that changed everything.
 
-Could resumed work delegate immediately? Could handoffs survive timing jitter? Could status updates be trusted while debugging?
+A gateway restart was attempted with invalid config. The gateway did not recover cleanly, and manual physical intervention was required. This stopped being an "annoying UX" problem and became an ops safety problem.
 
-This is where reliability came from boring, practical engineering:
+Root cause in logs was precise: an invalid `agents` config key (subagent-related setting mismatch) caused config rejection during startup.
 
-- safer restart sequencing with explicit stop/wait/start verification
-- lock hygiene tooling for stale session locks
-- serialized, retried handoff delivery instead of best-effort bursts
-- clearer messaging policy so validation output wasn't confused with duplicate noise
+From that point forward, the policy became non-negotiable:
 
-No single item was dramatic. Together, they changed system behavior.
+- validate config before restart
+- treat restart as a guarded operation
+- never rely on optimistic restart behavior
 
-## Fifth turn: making failures legible
+This was the turning point from experimentation to discipline.
 
-One subtle problem was that some failures were not true failures.
+## Fourth turn: hardening the restart/handoff mechanics
 
-A restart could look broken from the caller's perspective while the service itself had already recovered. Messaging could look duplicated when multiple delivery paths overlapped. Testing could appear flaky when runs weren't clearly labeled.
+With safety policy in place, we focused on the mechanics that actually create reliability.
 
-So we made the system easier to reason about:
+We added a safer restart script that does: validate -> stop -> wait -> start -> verify. Then we fixed a subtle failure mode where restart commands looked failed because the caller got SIGTERM even when the service recovered. The fix was detached restart execution when running from gateway context.
 
-- detached restart execution when needed
-- single-path user-visible messaging in main Telegram flow
-- run markers during repeated tests
+We also hardened handoff delivery:
 
-The result wasn't just fewer bugs. It was faster diagnosis when something *did* look wrong.
+- gateway-readiness preflight before delivery
+- per-session serialization (`flock`) so concurrent writes don't collide
+- retry + backoff for transient failures
 
-## Where we landed
+And we added stale lock cleanup tooling so dead PID locks don't keep poisoning session writes.
 
-By the end, the flow held under repeated tests:
+At this stage, the system became much less fragile under load and timing jitter.
+
+## Fifth turn: making observations trustworthy
+
+The next problem wasn't core runtime failure — it was observability noise.
+
+During repeated tests, messages looked duplicated, which made good runs look bad. We traced this to delivery-path confusion in the same Telegram thread. So we simplified operator output rules:
+
+- one user-visible delivery path per update
+- clear run markers for repeated test cycles
+- fewer "status about status" messages
+
+This made results legible. And once results are legible, debugging speed improves dramatically.
+
+## What "working" looked like in the final tests
+
+By the end, we repeatedly validated the same sequence:
 
 1. checkpoint before restart
 2. resume checkpoint after restart
-3. post-restart subagent spawn
+3. post-restart Alex spawn
 4. completion acknowledgment
 
-The biggest win is operational: Lin can make gateway changes and recover continuity with far less human babysitting.
+That sequence held across multiple runs.
 
-Not magic. Just guardrails, iteration, and treating reliability as a product feature instead of an afterthought.
+So the outcome isn't "we never have errors." The outcome is better: failures are rarer, safer, easier to diagnose, and less likely to require human rescue.
 
 ---
 
-OpenClaw gives strong primitives out of the box.
+OpenClaw already gives strong primitives.
 
-What this journey taught us is that dependable autonomy comes from how you compose those primitives under real failure conditions.
+What this journey proved is that dependable autonomy comes from how you compose those primitives under real-world failure conditions — especially around restarts, config validity, and session continuity.
