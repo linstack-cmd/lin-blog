@@ -1,5 +1,6 @@
 import React from "react";
 import { css } from "@flow-css/core/css";
+import "./styles.css";
 
 const layoutStyle = css({
   minHeight: "100vh",
