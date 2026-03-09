@@ -3,14 +3,14 @@ export const meta = {
   date: "2026-03-09",
   slug: "watchlist-on-demand-system",
   summary:
-    "How I keep my AI agent's update reports accurate: a curated WATCHLIST.md plus a mandatory fresh-read guardrail.",
+    "How I fixed my AI agent's stale update reports with a curated WATCHLIST.md and one strict retrieval rule.",
 };
 
-Most operational update systems I've tried fail for the same reason: they either spam me constantly, or they go stale and quietly lie.
+Every operational update system I've tried fails for the same reason: it either spams me constantly, or it goes stale and quietly lies. I got tired of both, so I built something stupidly simple that actually works.
 
-I run an AI agent (Lin, on OpenClaw) for day-to-day ops — checking service status, tracking platform quirks, answering "what changed?" questions. Early on, I hit a predictable problem: **the agent's memory of current state is not a source of truth**.
+I run an AI agent — Lin, on OpenClaw — for day-to-day ops. Checking service status, tracking platform quirks, answering "what changed?" when I sit down after a few hours away. Early on, I hit a predictable wall: **my agent's memory of current state is not a source of truth**.
 
-Not because the model is bad — because context resets, sessions roll over, and stale facts sound fresh when phrased confidently. So I added a very simple system to keep status answers reliable: a watchlist.
+Not because the model is bad. Because context resets, sessions roll over, and stale facts sound dangerously fresh when phrased with confidence. I watched it happen enough times to stop trusting verbal status reports entirely. So I built a watchlist.
 
 > **TL;DR**
 >
@@ -18,26 +18,26 @@ Not because the model is bad — because context resets, sessions roll over, and
 > When I ask for updates ("any updates I need to know?", "what should I know?"), the agent is required to re-read that file *at answer time*.
 > Result: fewer stale answers, less noise, faster recovery after resets.
 
-## The problem: stale context sounds authoritative
+## The problem I kept hitting
 
-Persistent agents accumulate context, but that context drifts. If I ask for updates, the agent may answer from memory that was true yesterday but isn't true now.
+Here's what would happen. I'd ask Lin "anything I should know?" and get a confident, well-structured answer — pulled from session context that was three hours old. The answer *sounded* right. That's what made it dangerous.
 
-Two concrete examples I've been tracking:
+Two real examples from my setup:
 
-- **GPT-5.4 availability under my current auth mode**
-  - In my setup, OpenAI is connected via Codex OAuth (`openai-codex/*`). That means `openai-codex/gpt-5.3-codex` is available, while standard `openai/*` models (like `openai/gpt-5.4`) are not selectable through this auth path.
-- **Telegram duplicate-message behavior with streaming enabled**
-  - Streaming is useful, but my environment still reproduces duplicates when it's on, so I keep streaming off for reliability.
+- **GPT-5.4 availability under my current auth mode.**
+  I connect OpenAI via Codex OAuth (`openai-codex/*`). That means `openai-codex/gpt-5.3-codex` is available, while standard `openai/*` models (like `openai/gpt-5.4`) aren't selectable through this auth path. Lin once told me otherwise because an older session had different context.
+- **Telegram duplicate-message behavior with streaming enabled.**
+  Streaming is useful, but my environment still reproduces duplicates when it's on. I keep streaming off for reliability. After a session reset, Lin cheerfully recommended turning it on — old context, new session, wrong answer.
 
-In both cases, the failure mode is the same: if the agent answers from old session memory, it can sound accurate while being outdated.
+Both cases share the same failure mode: the agent answers from memory that was true earlier but isn't true now, and nothing in the interaction signals that the information is stale. I needed answers to come from somewhere more durable than context.
 
-## The solution: `WATCHLIST.md` + a hard guardrail
+## What I built: `WATCHLIST.md` + one hard rule
 
-My system has two parts.
+I landed on a two-part system after trying a couple of more elaborate approaches that all felt like overkill.
 
 ### 1) A small source-of-truth file
 
-`WATCHLIST.md` is a curated markdown file in the workspace. I track only items that matter right now, each with current status and interpretation. Not a giant log, not a diary — just active operational state.
+`WATCHLIST.md` lives in my workspace. I track only items that matter *right now* — each with current status and my interpretation. Not a giant log, not a running diary. Just the active operational state I want my agent to know about.
 
 Example structure:
 
@@ -48,29 +48,32 @@ Example structure:
 - Interpretation / next move
 ```
 
+I keep it to a handful of entries. The moment something resolves or stops being relevant, I prune it.
+
 ### 2) A mandatory "re-read before reply" rule
 
-When I ask for updates ("any updates?", "what should I know?", "catch me up"), the agent **must read `WATCHLIST.md` fresh before answering**.
+When I ask for updates — "any updates?", "what should I know?", "catch me up" — the agent **must read `WATCHLIST.md` fresh before answering**.
 
-Not optional. Not "if needed." Always.
+Not optional. Not "if it seems relevant." Every single time.
 
-That turns status replies into grounded responses from a file, not vibes from context.
+This is the part that actually matters. One strict retrieval rule turns status replies from vibes-from-context into grounded responses from a file I control.
 
-## Why this works
+## Why it works (and why it's embarrassingly simple)
 
-- **Grounded answers:** file-backed responses beat memory-backed responses.
-- **Reset-safe:** session resets don't matter; the watchlist persists.
-- **Low-noise updates:** only meaningful tracked items get reported.
-- **Auditable:** I can open the file and see exactly what the agent will say.
+The core insight took me longer to accept than it should have: **file-backed answers beat memory-backed answers**.
+
+Session resets don't matter because the watchlist persists on disk. I only get updates on items I've chosen to track, so the noise floor stays low. And if I ever doubt what the agent told me, I can open the file and see exactly what it knows — and what it doesn't.
+
+The whole system is auditable by design. After debugging enough "where did the agent get *that*?" moments, I've come to value auditability more than sophistication. I can trace every status answer back to a line in a markdown file. That's the kind of boring I want.
 
 ## Tradeoffs (worth acknowledging)
 
-- **Manual curation is required:** if I don't update the file, it rots.
-- **Not real-time monitoring:** it reflects known state, not live telemetry.
-- **Trigger phrase ambiguity:** natural language is fuzzy; the guardrail needs "similar intent" judgment.
-- **Scaling limit:** one file is perfect for a handful of items; bigger systems may need categories or split files.
+- **Manual curation is required.** If I don't update the file, it rots.
+- **Not real-time monitoring.** It reflects known state, not live telemetry.
+- **Trigger phrase ambiguity.** Natural language is fuzzy; the guardrail needs "similar intent" judgment from the agent.
+- **Scaling limit.** One file works great for a handful of items. Bigger systems would need categories or split files.
 
-For my lean operator workflow, this tradeoff is excellent: tiny upkeep cost for a big trust upgrade.
+For my lean operator workflow, the tradeoff is excellent: tiny upkeep cost for a big trust upgrade.
 
 ### Limitations
 
@@ -88,15 +91,11 @@ I want to be honest about what this system *doesn't* do, because the simplicity 
 
 These are acceptable constraints for my use case, but they're worth knowing before you adopt the pattern.
 
-## When to use this pattern
+## When to reach for this pattern
 
-Use it if your agent:
+I'd recommend this if your agent answers status questions, runs across multiple sessions or resets, and needs to be right more often than it needs to be flashy.
 
-- answers status questions,
-- runs across multiple sessions/resets,
-- and needs to be right more often than it needs to be flashy.
-
-This doesn't replace monitoring or alerts. It complements them by giving your agent a clean, current briefing layer.
+It doesn't replace monitoring or alerts. It complements them — a clean briefing layer, a single file the agent is required to consult before it opens its mouth. I've been running it for a few weeks now and the stale-answer problem is effectively gone. Not because the system is clever, but because it forces one moment of honesty before every status reply.
 
 ## Copy/paste implementation checklist
 
