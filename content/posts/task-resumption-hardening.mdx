@@ -16,6 +16,28 @@ In other words: reduce operator interruption, preserve flow.
 
 The reality was less simple.
 
+## Why this matters: self-fixing agents
+
+If an OpenClaw agent can't safely recover from its own operational changes, it stays dependent on a human for every restart hiccup.
+
+For real autonomy, an agent needs to be able to:
+
+- change config safely
+- restart gateway safely
+- recover its task context
+- continue without waiting for a manual "resume" prompt
+
+## What OpenClaw doesn't give you out of the box (today)
+
+OpenClaw is strong, but this full continuity loop isn't turnkey by default:
+
+- restart flows can report false failures depending on invocation context
+- lock contention can appear around restart boundaries
+- task continuity after restart needs explicit operator workflow discipline
+- messaging behavior can create confusing duplicate-looking updates during testing
+
+None of that is fatal, but it means production-grade self-recovery needs additional guardrails.
+
 ## What broke first
 
 ### 1) Session lock contention after restart
@@ -39,7 +61,7 @@ Checkpoint updates sometimes appeared twice in Telegram.
 
 We originally blamed mixed reply paths (`message.send` + normal reply), which was partly true. But the bigger finding in this environment: `message.send` could be mirrored back as an extra assistant-visible delivery line, making duplicates look worse during test loops.
 
-## What we changed
+## What we changed to address those limitations
 
 ### Safer restart path
 
