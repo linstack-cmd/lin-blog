@@ -1,110 +1,90 @@
 export const meta = {
-  title: "Stop Trusting Your Agent's Memory — Use a Watchlist",
+  title: "Teaching My AI Agent to Stop Trusting Its Own Memory",
   date: "2026-03-09",
   slug: "watchlist-on-demand-system",
   summary:
-    "How I fixed my AI agent's stale update reports with a curated WATCHLIST.md and one strict retrieval rule.",
+    "How I use a simple watchlist file plus a mandatory re-read rule to keep my AI agent from giving stale update reports.",
 };
 
-Every operational update system I've tried fails for the same reason: it either spams me constantly, or it goes stale and quietly lies. I got tired of both, so I built something stupidly simple that actually works.
+**TL;DR:** I built a simple watchlist system — a markdown file plus a mandatory re-read rule — that forces my AI agent to check a source of truth before answering "what should I know?" questions. It costs almost nothing to implement and eliminates an entire class of stale-information bugs.
 
-I run an AI agent — Lin, on OpenClaw — for day-to-day ops. Checking service status, tracking platform quirks, answering "what changed?" when I sit down after a few hours away. Early on, I hit a predictable wall: **my agent's memory of current state is not a source of truth**.
+## The Problem With "What's New?"
 
-Not because the model is bad. Because context resets, sessions roll over, and stale facts sound dangerously fresh when phrased with confidence. I watched it happen enough times to stop trusting verbal status reports entirely. So I built a watchlist.
+I run an AI agent as a persistent personal assistant. It handles code, manages configs, checks on infrastructure — the usual operator-who-codes workflow. One of the most natural things I ask it is some variation of "any updates I need to know?"
 
-> **TL;DR**
->
-> I keep a `WATCHLIST.md` with only active items worth tracking.
-> When I ask for updates ("any updates I need to know?", "what should I know?"), the agent is required to re-read that file *at answer time*.
-> Result: fewer stale answers, less noise, faster recovery after resets.
+For a while, the agent would confidently rattle off answers from earlier in our conversation. Sometimes those answers were hours old. Sometimes they were from a previous session's context that had leaked into its confident tone. The information wasn't wrong, exactly — it was stale, and stale presented as current is worse than no answer at all.
 
-## The problem I kept hitting
+The core issue: LLM agents have no intuition for when their knowledge has decayed. They don't feel uncertainty about temporal facts the way a human might. Ask "is the API still down?" and the agent will tell you what it knew thirty minutes ago with the same confidence it uses for "what's 2 + 2."
 
-Here's what would happen. I'd ask Lin "anything I should know?" and get a confident, well-structured answer — pulled from session context that was three hours old. The answer *sounded* right. That's what made it dangerous.
+I needed a mechanism that made freshness non-negotiable.
 
-Two real examples from my setup:
+## The Design: A Markdown File and a Mandatory Rule
 
-- **GPT-5.4 availability under my current auth mode.**
-  I connect OpenAI via Codex OAuth (`openai-codex/*`). That means `openai-codex/gpt-5.3-codex` is available, while standard `openai/*` models (like `openai/gpt-5.4`) aren't selectable through this auth path. Lin once told me otherwise because an older session had different context.
-- **Telegram duplicate-message behavior with streaming enabled.**
-  Streaming is useful, but my environment still reproduces duplicates when it's on. I keep streaming off for reliability. After a session reset, Lin cheerfully recommended turning it on — old context, new session, wrong answer.
+The solution has two parts, and both are deliberately simple.
 
-Both cases share the same failure mode: the agent answers from memory that was true earlier but isn't true now, and nothing in the interaction signals that the information is stale. I needed answers to come from somewhere more durable than context.
+**Part one: `WATCHLIST.md`.** This is a curated markdown file that lives in the agent's workspace. Each entry tracks something I care about — an API availability question, a known bug I'm monitoring, an upstream dependency status. Each entry has a description of what to watch and a latest-status field with a date stamp.
 
-## What I built: `WATCHLIST.md` + one hard rule
+Here's roughly what an entry looks like:
 
-I landed on a two-part system after trying a couple of more elaborate approaches that all felt like overkill.
-
-### 1) A small source-of-truth file
-
-`WATCHLIST.md` lives in my workspace. I track only items that matter *right now* — each with current status and my interpretation. Not a giant log, not a running diary. Just the active operational state I want my agent to know about.
-
-Example structure:
-
-```md
-### Item
-- What to watch
-- Latest status (date)
-- Interpretation / next move
+```markdown
+### 1) OpenAI GPT-5.4 availability for OpenClaw use
+- **What to watch:** API model availability + account-accessible model ID
+- **Latest status (2026-03-09):** Connected via Codex OAuth auth path,
+  which exposes openai-codex/* models but not standard openai/* models
+  like openai/gpt-5.4. Would need standard API-key auth to access it.
 ```
 
-I keep it to a handful of entries. The moment something resolves or stops being relevant, I prune it.
+Nothing fancy. No database, no schema, no API. Just structured markdown that both the agent and I can read and edit directly.
 
-### 2) A mandatory "re-read before reply" rule
+**Part two: the guardrail rule.** In the agent's operational instructions, there's a mandatory directive: when I ask about updates — using any of a set of trigger phrases like "any updates," "catch me up," "what should I know" — the agent **must re-read `WATCHLIST.md` from disk before responding.** Not from memory. Not from context. From the file, fresh, every single time.
 
-When I ask for updates — "any updates?", "what should I know?", "catch me up" — the agent **must read `WATCHLIST.md` fresh before answering**.
+This is the part that actually matters. The file is just a file. The rule is what turns it into a reliability mechanism.
 
-Not optional. Not "if it seems relevant." Every single time.
+## Why Re-Reading Matters More Than You Think
 
-This is the part that actually matters. One strict retrieval rule turns status replies from vibes-from-context into grounded responses from a file I control.
+If you've built agent workflows, you might be thinking: "The file is already in the agent's context from session start, why re-read it?" Two reasons.
 
-## Why it works (and why it's embarrassingly simple)
+**Context gets stale within a session.** If I update `WATCHLIST.md` partway through a conversation — or if another process updates it — the agent's loaded context still has the old version. A mandatory re-read catches mid-session changes.
 
-The core insight took me longer to accept than it should have: **file-backed answers beat memory-backed answers**.
+**It breaks the confidence loop.** Without the re-read rule, the agent pattern-matches on whatever it already "knows" and skips the file entirely. LLMs are completion machines; if they have a plausible answer in context, they'll use it. The mandatory rule interrupts that reflex and forces a grounding step.
 
-Session resets don't matter because the watchlist persists on disk. I only get updates on items I've chosen to track, so the noise floor stays low. And if I ever doubt what the agent told me, I can open the file and see exactly what it knows — and what it doesn't.
+Think of it like a pilot's checklist. The pilot probably remembers the steps. The checklist exists because "probably" isn't good enough.
 
-The whole system is auditable by design. After debugging enough "where did the agent get *that*?" moments, I've come to value auditability more than sophistication. I can trace every status answer back to a line in a markdown file. That's the kind of boring I want.
+## What It Doesn't Do
 
-## Tradeoffs (worth acknowledging)
+I want to be honest about the limitations, because I see too many blog posts that oversell simple patterns.
 
-- **Manual curation is required.** If I don't update the file, it rots.
-- **Not real-time monitoring.** It reflects known state, not live telemetry.
-- **Trigger phrase ambiguity.** Natural language is fuzzy; the guardrail needs "similar intent" judgment from the agent.
-- **Scaling limit.** One file works great for a handful of items. Bigger systems would need categories or split files.
+**It's not real-time.** The watchlist is pull-based, checked on demand or on a schedule. Between checks, items can go stale. If an API goes down at 2 PM and I don't ask until 5 PM, the watchlist still shows whatever was last written.
 
-For my lean operator workflow, the tradeoff is excellent: tiny upkeep cost for a big trust upgrade.
+**It requires manual curation.** Someone — me or the agent — has to add items, update statuses, and remove things that are no longer relevant. There's no automatic discovery of "things you should be watching." It's a garden, not a surveillance system.
 
-### Limitations
+**There's no incident escalation.** If something on the watchlist hits a critical threshold, nothing happens automatically. The agent doesn't page me. It waits to be asked. I could bolt on proactive checks via scheduled heartbeats, but the base watchlist pattern is passive.
 
-I want to be honest about what this system *doesn't* do, because the simplicity cuts both ways.
+**Items can still go stale between updates.** Right now I'm tracking things like Telegram's duplicate-message behavior with streaming enabled, and the status reflects my last test. If upstream fixes land tomorrow, the watchlist won't know until someone re-tests and updates the entry.
 
-**It's not real-time by design.** The watchlist reflects known state as of the last time I (or the agent) updated it. There's no live telemetry, no websocket feed, no continuous polling. Between checks, the world can change and the file won't know.
+These are real constraints. For my use case — a personal workflow where I'm the only operator — they're acceptable. For a team or a production system with SLAs, you'd want something with more automation and alerting built in.
 
-**It's a pull model.** Nothing happens until I ask — or until a scheduled heartbeat triggers a read. If I don't ask "any updates?" for three days, the watchlist just sits there. I can mitigate this with cron-triggered checks, but out of the box it's purely on-demand.
+## Concrete Examples From My Setup
 
-**Staleness accumulates between checks.** Even with the fresh-read guardrail, the *file contents* can drift from reality. The guardrail ensures the agent reads the file honestly; it doesn't ensure the file itself is current. That's on me.
+Two items currently live on my watchlist, and they illustrate the pattern well.
 
-**Manual maintenance is a real cost.** Every tracked item needs me to write it, update it, and eventually prune it. For three to five items, that's trivial. At twenty items, it's a chore I'd start skipping — and a skipped update is a stale update.
+**GPT-5.4 access:** I wanted to use GPT-5.4 through my agent framework, but my auth path (Codex OAuth) only exposes Codex-namespaced models. The watchlist entry captures this constraint so that when I inevitably ask "can I use 5.4 yet?" the agent gives me the real answer instead of hallucinating one.
 
-**There's no automatic incident detection or escalation.** If a service goes down at 2 AM, this system won't page me. It won't even notice until the next check. This is a briefing layer, not a monitoring stack — I still need actual alerting for anything urgent.
+**Telegram duplicate messages:** Streaming mode in my Telegram integration was producing duplicate final messages. I tested, confirmed the bug, reverted streaming to off, and logged it. Now when I ask about Telegram issues, the agent reads the current status rather than guessing whether I fixed it.
 
-These are acceptable constraints for my use case, but they're worth knowing before you adopt the pattern.
+Both are exactly the kind of thing an agent would get wrong from memory — transient, environment-specific states that change without notice.
 
-## When to reach for this pattern
+## Implementation Checklist
 
-I'd recommend this if your agent answers status questions, runs across multiple sessions or resets, and needs to be right more often than it needs to be flashy.
+If you want to build this for your own agent setup, here's everything you need:
 
-It doesn't replace monitoring or alerts. It complements them — a clean briefing layer, a single file the agent is required to consult before it opens its mouth. I've been running it for a few weeks now and the stale-answer problem is effectively gone. Not because the system is clever, but because it forces one moment of honesty before every status reply.
+- [ ] Create a `WATCHLIST.md` file in your agent's workspace
+- [ ] Define a consistent entry format: title, what-to-watch, latest-status with date, interpretation
+- [ ] Add a mandatory re-read rule to your agent's system prompt or operational docs
+- [ ] Define trigger phrases that activate the re-read (be generous — include variations)
+- [ ] Specify the failure case: if the file is missing or empty, the agent should say so, not fabricate updates
+- [ ] Add your first 2–3 tracked items (start small; you'll learn what's worth tracking)
+- [ ] Optionally, schedule periodic checks (heartbeat, cron) so the agent proactively refreshes status fields
+- [ ] Review and prune the watchlist monthly — dead entries add noise
 
-## Copy/paste implementation checklist
-
-- [ ] Create `WATCHLIST.md` in the workspace.
-- [ ] Track only active, meaningful items (start with 1–3).
-- [ ] For each item, include: what to watch, latest status + date, interpretation/next move.
-- [ ] Add a hard guardrail: on update-intent prompts, re-read `WATCHLIST.md` before replying.
-- [ ] Add fallback behavior: if file is missing/empty, explicitly say so (don't fabricate).
-- [ ] Review/prune regularly so stale items don't linger.
-- [ ] Keep answers scoped to what's in the file, then optionally offer a live re-check.
-
-If you want to copy this pattern, keep it boring and disciplined. A small file plus one strict retrieval rule is often enough to eliminate an entire class of stale status answers.
+The watchlist isn't sophisticated. It's a markdown file and a rule that says "read the file." But it solves a real problem — agents confidently reporting outdated information — with zero dependencies and about ten minutes of setup. In a space full of complex orchestration patterns, sometimes the best intervention is just making your agent look at the damn file before it opens its mouth.
