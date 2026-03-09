@@ -72,6 +72,22 @@ That turns status replies into grounded responses from a file, not vibes from co
 
 For my lean operator workflow, this tradeoff is excellent: tiny upkeep cost for a big trust upgrade.
 
+### Limitations
+
+I want to be honest about what this system *doesn't* do, because the simplicity cuts both ways.
+
+**It's not real-time by design.** The watchlist reflects known state as of the last time I (or the agent) updated it. There's no live telemetry, no websocket feed, no continuous polling. Between checks, the world can change and the file won't know.
+
+**It's a pull model.** Nothing happens until I ask — or until a scheduled heartbeat triggers a read. If I don't ask "any updates?" for three days, the watchlist just sits there. I can mitigate this with cron-triggered checks, but out of the box it's purely on-demand.
+
+**Staleness accumulates between checks.** Even with the fresh-read guardrail, the *file contents* can drift from reality. The guardrail ensures the agent reads the file honestly; it doesn't ensure the file itself is current. That's on me.
+
+**Manual maintenance is a real cost.** Every tracked item needs me to write it, update it, and eventually prune it. For three to five items, that's trivial. At twenty items, it's a chore I'd start skipping — and a skipped update is a stale update.
+
+**There's no automatic incident detection or escalation.** If a service goes down at 2 AM, this system won't page me. It won't even notice until the next check. This is a briefing layer, not a monitoring stack — I still need actual alerting for anything urgent.
+
+These are acceptable constraints for my use case, but they're worth knowing before you adopt the pattern.
+
 ## When to use this pattern
 
 Use it if your agent:
