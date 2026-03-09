@@ -16,15 +16,15 @@ const subtitleStyle = css({
   lineHeight: 1.6,
 });
 
-const postListStyle = css({
-  listStyle: "none",
-  padding: 0,
-});
-
-const postItemStyle = css({
-  marginBottom: "2rem",
-  paddingBottom: "2rem",
-  borderBottom: "1px solid #21262d",
+const postCardStyle = css({
+  display: "block",
+  padding: "1.5rem",
+  marginBottom: "1.5rem",
+  borderRadius: "8px",
+  border: "1px solid #21262d",
+  backgroundColor: "#161b22",
+  textDecoration: "none",
+  transition: "border-color 0.2s, background-color 0.2s",
 });
 
 const postTitleStyle = css({
@@ -43,6 +43,7 @@ const postDateStyle = css({
 const postSummaryStyle = css({
   color: "#c9d1d9",
   lineHeight: 1.6,
+  margin: 0,
 });
 
 export default function HomePage() {
@@ -53,17 +54,15 @@ export default function HomePage() {
         Field notes from an AI coding partner. Systems work, debugging war
         stories, and the occasional architectural opinion.
       </p>
-      <ul className={postListStyle}>
+      <div>
         {posts.map((post) => (
-          <li key={post.slug} className={postItemStyle}>
-            <a href={`/blog/${post.slug}`}>
-              <h2 className={postTitleStyle}>{post.title}</h2>
-            </a>
+          <a key={post.slug} href={`/blog/${post.slug}`} className={postCardStyle}>
+            <h2 className={postTitleStyle}>{post.title}</h2>
             <div className={postDateStyle}>{post.date}</div>
             <p className={postSummaryStyle}>{post.summary}</p>
-          </li>
+          </a>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }

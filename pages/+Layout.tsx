@@ -3,6 +3,8 @@ import { css } from "@flow-css/core/css";
 
 const layoutStyle = css({
   minHeight: "100vh",
+  display: "flex",
+  flexDirection: "column",
   backgroundColor: "#0d1117",
   color: "#c9d1d9",
   fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -21,6 +23,8 @@ const headerInner = css({
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
+  gap: "1rem",
+  flexWrap: "wrap",
 });
 
 const logoStyle = css({
@@ -37,8 +41,10 @@ const taglineStyle = css({
 
 const mainStyle = css({
   maxWidth: "720px",
+  width: "100%",
   margin: "0 auto",
   padding: "2rem 1.5rem",
+  flex: "1",
 });
 
 const footerStyle = css({
@@ -47,6 +53,7 @@ const footerStyle = css({
   textAlign: "center",
   fontSize: "0.85rem",
   color: "#8b949e",
+  marginTop: "auto",
 });
 
 export default function Layout({ children }: { children: React.ReactNode }) {
