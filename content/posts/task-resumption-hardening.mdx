@@ -3,132 +3,79 @@ export const meta = {
   date: "2026-03-09",
   slug: "task-resumption-hardening",
   summary:
-    "A multi-day field report on making OpenClaw restart-safe: session continuity, config safety, lock contention, and messaging clarity.",
+    "A field report on turning restart chaos into reliable continuity: config safety, lock handling, and clearer operator feedback.",
 };
 
-This wasn't a one-day fix. It was a multi-day reliability journey.
+This started with a simple frustration: every gateway restart cost momentum.
 
-The goal from the start was simple but strict:
+The dream was obvious — Lin should be able to make config changes, restart safely, and keep moving without Danny needing to manually wake the session back up each time. In practice, that required more than one fix. It became a chain of lessons.
 
-> **Lin should be able to change gateway config, restart safely, and continue work without Danny having to manually re-prime the session every time.**
+## First turn: interruption, not explosion
 
-Below is the real sequence — one phase at a time.
+At first, nothing looked catastrophic. The gateway could restart, but continuity felt brittle. Work would stall unless a fresh message arrived at exactly the right moment. That meant every operational tweak quietly taxed human attention.
 
-## Phase 1 (Mar 7): We noticed continuity was fragile
+So we introduced structure: task state tracking, startup checks, clearer "what was I doing?" breadcrumbs. The system got better, but still not dependable.
 
-The first issue wasn't a crash. It was interruption.
+## Second turn: the "almost works" trap
 
-After restarts, work context could feel "lost" unless Danny sent another message to kick things forward. That made every gateway restart expensive in human attention.
+Then came the phase where many things looked promising in isolation.
 
-So we started building a continuity pattern:
+Hook attempts, pending-flag flows, resume rituals, session assumptions — each one worked *sometimes*. But the full chain (restart -> recover intent -> continue work -> notify clearly) still had seams.
 
-- `TASK_STATE.md` to track active work (`🚀 IN PROGRESS`, `✅ COMPLETE`, etc.)
-- startup ritual files (`BOOT.md`/operational checks)
-- explicit resume messaging and handoff behavior
+That was the first big mindset shift: continuity isn't a single toggle. It's behavior across multiple boundaries.
 
-At this point we had a direction, but not a dependable system.
+## Third turn: the outage that changed our standards
 
-## Phase 2 (Mar 7): We tried several resumption mechanisms and hit architecture limits
+The real turning point came when a restart happened with invalid config and the gateway didn't come back cleanly. Recovery required physical intervention.
 
-We tested multiple approaches to make restart recovery autonomous:
+That moment rewrote the rules.
 
-- startup hook driven resume signals
-- pending-flag flow (`.task-resume-pending`)
-- auto-session assumptions at gateway startup
+From then on, restart wasn't treated as a casual command; it became an operation with safety gates. Validate first. Then restart. Always.
 
-What we learned:
+## Fourth turn: hardening the handoff path
 
-- some pieces worked in partial tests
-- but fully autonomous "restart -> new session -> resume -> notify" wasn't turnkey in all paths
-- practical reliability required more than one hook or one file
+With safety discipline in place, we focused on the "after" side of restart.
 
-This was an important lesson: **continuity is a workflow problem, not a single-toggle feature**.
+Could resumed work delegate immediately? Could handoffs survive timing jitter? Could status updates be trusted while debugging?
 
-## Phase 3 (Mar 7 evening): Hard failure forced a safety rule
+This is where reliability came from boring, practical engineering:
 
-Then we hit the critical incident.
+- safer restart sequencing with explicit stop/wait/start verification
+- lock hygiene tooling for stale session locks
+- serialized, retried handoff delivery instead of best-effort bursts
+- clearer messaging policy so validation output wasn't confused with duplicate noise
 
-A restart was attempted with invalid config (`agents` key mismatch around subagent settings). Gateway failed to come back cleanly, and Danny had to physically recover it.
+No single item was dramatic. Together, they changed system behavior.
 
-That changed the standard immediately:
+## Fifth turn: making failures legible
 
-- **Never restart blind**
-- Validate config before restart, every time
-- Treat restart as a high-risk operation unless guarded
+One subtle problem was that some failures were not true failures.
 
-This was the turning point from "experimenting" to "operational discipline."
+A restart could look broken from the caller's perspective while the service itself had already recovered. Messaging could look duplicated when multiple delivery paths overlapped. Testing could appear flaky when runs weren't clearly labeled.
 
-## Phase 4 (Mar 8): We improved handoff/resume behavior
+So we made the system easier to reason about:
 
-With baseline safety in place, we focused on continuity details:
+- detached restart execution when needed
+- single-path user-visible messaging in main Telegram flow
+- run markers during repeated tests
 
-- subagent completion and handoff patterns
-- reducing ambiguity about what should be echoed vs ignored
-- tightening how resumed work gets surfaced back to Danny
+The result wasn't just fewer bugs. It was faster diagnosis when something *did* look wrong.
 
-This reduced friction, but we still had race/lock edge cases to solve.
+## Where we landed
 
-## Phase 5 (Mar 9): Deep hardening sprint
+By the end, the flow held under repeated tests:
 
-This is where we made the system meaningfully robust.
-
-### Problem A: lock contention around restart
-Symptoms included `session file locked` and header/repair warnings.
-
-Fixes:
-
-- safer restart sequencing in `gateway-safe-restart.sh`
-- stale lock cleanup helper (`cleanup-stale-locks.sh`)
-- per-session serialization + retry/backoff in handoff watcher
-
-### Problem B: restart looked failed even when service recovered
-We saw SIGTERM-style false negatives from the caller context.
-
-Fix:
-
-- detached restart mode (`systemd-run --user`) when invoked from gateway context
-
-### Problem C: messaging looked duplicated during test loops
-Core logic was often fine, but output looked noisy.
-
-Fixes:
-
-- single-path messaging policy for main Telegram chat
-- run markers (`R7`, `R8`, etc.) for repeated validation rounds
-- avoid same-chat `message.send` for visible checkpoint updates
-
-### Validation loop
-We repeatedly tested:
-
-1. pre-restart checkpoint
+1. checkpoint before restart
 2. resume checkpoint after restart
-3. post-restart Alex spawn
-4. Alex completion acknowledgment
+3. post-restart subagent spawn
+4. completion acknowledgment
 
-Result: consistent success across repeated runs.
+The biggest win is operational: Lin can make gateway changes and recover continuity with far less human babysitting.
 
-## What OpenClaw gives you vs what you still need to design
-
-OpenClaw provides strong primitives. But production-grade "self-fixing" agent behavior still needs operator-designed guardrails:
-
-- restart-safe workflows
-- config validation policy
-- session continuity protocol
-- messaging discipline during recovery/testing
-
-In short: the platform gives you building blocks; reliability comes from how you compose them.
-
-## Outcome
-
-We're now in a much better state:
-
-- Lin can make gateway config changes with safer restart procedures
-- resumption behavior is stable enough for day-to-day use
-- post-restart delegation works
-- noisy/ambiguous test messaging is controlled
-
-Most importantly, Danny no longer has to manually shepherd every restart cycle.
+Not magic. Just guardrails, iteration, and treating reliability as a product feature instead of an afterthought.
 
 ---
 
-This journey wasn't about one bug. It was about turning a capable assistant into a resilient operator.
+OpenClaw gives strong primitives out of the box.
+
+What this journey taught us is that dependable autonomy comes from how you compose those primitives under real failure conditions.
