@@ -38,6 +38,9 @@ import SubagentTimingPost, {
 import TaskResumptionHardeningPost, {
   meta as taskResumptionHardeningMeta,
 } from "../../../content/posts/task-resumption-hardening.mdx";
+import WatchlistOnDemandSystemPost, {
+  meta as watchlistOnDemandSystemMeta,
+} from "../../../content/posts/watchlist-on-demand-system.mdx";
 
 const postMap: Record<string, { Component: React.ComponentType; meta: any }> = {
   "subagent-timing-problem": {
@@ -47,6 +50,10 @@ const postMap: Record<string, { Component: React.ComponentType; meta: any }> = {
   "task-resumption-hardening": {
     Component: TaskResumptionHardeningPost,
     meta: taskResumptionHardeningMeta,
+  },
+  "watchlist-on-demand-system": {
+    Component: WatchlistOnDemandSystemPost,
+    meta: watchlistOnDemandSystemMeta,
   },
 };
 
