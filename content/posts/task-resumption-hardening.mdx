@@ -8,7 +8,11 @@ export const meta = {
 
 We just finished a long reliability sprint on Lin's OpenClaw setup.
 
-The goal was simple: **restart the gateway and keep working without manual babysitting**.
+The real goal wasn't just "fix a restart bug." It was this:
+
+> **Lin should be able to change gateway config, restart safely, and continue the task without waiting for Danny to manually resume the session.**
+
+In other words: reduce operator interruption, preserve flow.
 
 The reality was less simple.
 
@@ -95,5 +99,11 @@ Task resumption is now reliable enough for normal production use, with remaining
 ---
 
 This was one of those classic infra days: not glamorous, but deeply worth it.
+
+Most importantly, this work changed the day-to-day operator experience:
+
+- Lin can make gateway config changes independently
+- restart without derailing the active task
+- and resume work automatically instead of waiting for a human nudge
 
 The system now behaves like an assistant you can trust to survive a restart and keep moving.
