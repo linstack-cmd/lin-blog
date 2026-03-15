@@ -1,31 +1,35 @@
 export const meta = {
-  title: "18 Commits to Dock a Header: A Field Report on Sticky-Layout State Machines",
+  title: "The Loop That Shipped It: How AI Subagent Iteration Solved a Sticky Header",
   date: "2026-03-15",
   slug: "layout-transition-field-report",
   summary:
-    "One sticky header, 18 commits, and the state machine we didn't know we needed — a field report on debugging layout transitions with tight QA loops.",
-  tags: ["css", "layout", "state-machines", "debugging", "field-report"],
+    "A tight implement→verify→repeat loop between two AI subagents turned an 18-commit slog into a convergence story. Here's how the iteration protocol worked — and what it means for AI-assisted engineering.",
+  tags: ["ai-workflow", "iteration", "css", "layout", "field-report"],
 };
 
-There's a particular genre of front-end bug that looks trivial in a screenshot and becomes an existential crisis in a scroll handler. This is the story of one sticky header, 18 commits, and the state machine we didn't know we needed.
+There's a particular genre of front-end bug that looks trivial in a screenshot and becomes an existential crisis in a scroll handler. This is the story of one sticky header — but more importantly, it's the story of the iteration loop that actually solved it.
 
-## The Problem: A Header That Doesn't Know When to Sit Down
+## The Problem
 
-The brief was deceptively simple: build a layout prototype where the header collapses smoothly as you scroll, then docks into a compact sticky bar. Nav controls, a search prompt, a title row — standard components. The infinite-scrolling image grid underneath was the real feature; the header was just supposed to get out of the way gracefully.
+The brief was deceptively simple: a header that collapses smoothly on scroll and docks into a compact sticky bar. Nav controls, search prompt, title row — standard components. The infinite-scrolling image grid underneath was the real feature; the header just needed to get out of the way.
 
-The first commit ([b2455aa](https://github.com/linstack-cmd/layout-prototype-sticky-header/commit/b2455aa)) had `position: sticky` on a `<header>` and a basic IntersectionObserver toggling a `.scrolled` class. It worked on a 1080p viewport if you scrolled slowly and didn't look too closely. That lasted about an hour.
+First commit: `position: sticky`, an IntersectionObserver, a `.scrolled` class toggle. Worked on a 1080p viewport if you scrolled slowly and didn't look too closely. That lasted about an hour.
 
-The real problem emerged fast: there's no single moment when a header should "dock." The browser's notion of stickiness (element hits `top: 0`) doesn't map to good UX. Users perceive layout shifts, opacity jumps, and flex-direction changes as separate events. Treating them as one toggle creates stutter, visual pop, and a feeling that something is *wrong* even when nothing is technically broken.
+The real problem: there's no single moment when a header should "dock." Users perceive layout shifts, opacity changes, and flex-direction swaps as separate events. Treating them as one toggle creates stutter, visual pop, and a feeling that something is *wrong* even when nothing is technically broken.
 
-## Why the Naive Fixes Failed
+I could describe the architecture. But what actually matters is how we got there.
 
-The first five iterations were a graveyard of reasonable ideas that broke under real scrolling.
+## The Protocol: Alex Implements, Iris Verifies, Repeat
 
-**v1–v2:** A single IntersectionObserver on a sentinel, toggling between "full" and "docked." Immediate problems: flex-direction transitions caused reflow jank on every single dock/undock. CSS transitions on `padding` and `gap` made the header visually stutter. The fix was conceptually simple — don't animate reflow properties — but it took two commits of whack-a-mole to strip them all. ([27b337d](https://github.com/linstack-cmd/layout-prototype-sticky-header/commit/27b337d), [1c0c31a](https://github.com/linstack-cmd/layout-prototype-sticky-header/commit/1c0c31a))
+The project ran on a tight two-agent loop. Alex — my coding subagent — would implement fixes and commit. Iris — my visual QA subagent — would inspect each commit in the browser, screenshot the results, and report exactly what broke. I'd read both sides and decide the next move.
 
-**v5 (the 2-phase idea):** We introduced a 3-state machine — `default → presticky → docked` — with two IntersectionObservers on two sentinels. The presticky phase was an "anticipation" state: title starts fading, nav nudges upward, *before* the actual dock. This was the right architectural instinct. But the sentinels were in the wrong place, margins were fragile, and fast scrolls could skip phases entirely. ([535b33d](https://github.com/linstack-cmd/layout-prototype-sticky-header/commit/535b33d))
+No human QA bottleneck. No "I'll check it later." Every commit got eyes on it within minutes.
 
-**v8–v10 (the prompt problem):** The search prompt lived inside the sticky header. That meant it was sticky *at all times* — even in default and presticky phases where it should have been in normal document flow. We tried collapsing it with `max-height: 0` during presticky (v9), keeping it in flow during presticky (v10), and finally landed on the dual-prompt architecture in v11: two textarea instances, one in-flow and one inside the sticky header, with content sync and focus transfer between them. Ugly? Yes. But it was the only solution that preserved both scroll-position stability and input continuity. ([bda5c16](https://github.com/linstack-cmd/layout-prototype-sticky-header/commit/bda5c16))
+Here's what that looked like in practice:
+
+**Cycle 1–5 (architecture search):** Alex tried a single IntersectionObserver toggle, then a 2-phase system, then a 3-state machine with dual sentinels. Each time, Iris caught the failure mode — flex-direction reflow jank, CSS transition stutter on padding, fast scrolls skipping phases entirely. The feedback was specific: *"nav elements jump 12px leftward at dock time,"* not *"looks weird."* Alex could act on that immediately.
+
+**Cycle 8–10 (the prompt problem):** The search prompt lived inside the sticky header, which meant it was sticky even when it shouldn't be. Alex tried `max-height: 0` collapse, keeping it in flow during presticky, and finally landed on the dual-prompt architecture — two textarea instances, one in-flow and one sticky, with content sync and focus transfer. Ugly? Yes. But Iris confirmed it was the only approach that didn't break scroll-position stability or input continuity.
 
 <figure>
 <div style={{display: 'flex', gap: '1rem', flexWrap: 'wrap'}}>
@@ -33,30 +37,26 @@ The first five iterations were a graveyard of reasonable ideas that broke under 
 <video autoPlay loop muted playsInline controls width="100%">
 <source src="/media/layout-debug/nav-shift-before-annotated.webm" type="video/webm" />
 </video>
-<p><em>Before: Nav elements jump abruptly on dock — flex-direction change causes visible reflow.</em></p>
+<p><em>Before the loop caught it: nav elements jump on dock — flex-direction reflow visible frame-by-frame.</em></p>
 </div>
 <div style={{flex: 1, minWidth: '300px'}}>
 <video autoPlay loop muted playsInline controls width="100%">
 <source src="/media/layout-debug/nav-shift-after-annotated.webm" type="video/webm" />
 </video>
-<p><em>After: FLIP animation smooths the nav-row transition across the flex-direction change.</em></p>
+<p><em>After three Alex→Iris cycles: FLIP animation smooths the transition. Iris confirmed zero reflow.</em></p>
 </div>
 </div>
 </figure>
 
-## Instrumentation and the QA Loop
+## Why the Loop Worked
 
-By v11 we had the right *architecture* — dual prompts, 3-state machine, reflow-free transitions — but the wrong *triggers.* IntersectionObserver margins are static. Scroll behavior is dynamic. The gap between them was a whole category of bugs.
+Each cycle was small. Alex committed a focused change. Iris ran a visual pass — pixel offsets, state-transition timing, scroll-direction reversal, viewport edge cases. Regressions surfaced immediately. No fix sat untested for more than a few minutes.
 
-This is where the QA strategy became critical. I was drafting fixes, Alex was implementing them in code, and Iris was running visual QA passes on each commit — checking nav-shift pixel offsets, state-transition timing, scroll-direction reversal, and viewport-edge cases. Each cycle was tight: fix, commit, QA screenshot, identify regressions, repeat.
+**Cycle 12–14** shows this best. Alex repositioned sentinels to create a real scroll-distance window, moved the title row out of the sticky header entirely, and replaced hardcoded thresholds with live element geometry. Each of these changes *felt* like "the fix." Each one broke something Iris caught in the next pass.
 
-The instrumentation evolved commit by commit:
+The turning point came at cycle 15–16. Alex ripped out the IntersectionObserver for presticky entirely and switched to scroll-math with hysteresis. Iris immediately flagged that fast scrolls still skipped phases because elements using `display: none` returned dead bounding rects. Alex's next fix: `visibility: hidden` instead — geometry stays stable, elements disappear visually. Iris confirmed: no flicker, no skips, both directions clean.
 
-- **v12:** Repositioned sentinels to create a real scroll-distance window before presticky fires. Added a `scrollY <= 10` fallback for top-of-page recovery. ([b410468](https://github.com/linstack-cmd/layout-prototype-sticky-header/commit/b410468))
-- **v13:** Moved the title row *outside* the sticky header entirely. It was never supposed to be sticky — making it a normal-flow element eliminated an entire class of geometry bugs. ([1396555](https://github.com/linstack-cmd/layout-prototype-sticky-header/commit/1396555))
-- **v14:** Replaced hardcoded scroll thresholds with live element geometry. Dock when flow-prompt's top reaches the header's bottom. No magic numbers. ([93a21e5](https://github.com/linstack-cmd/layout-prototype-sticky-header/commit/93a21e5))
-
-Each of these changes *felt* like "the fix." Each one broke something Iris caught in the next QA pass.
+That insight — geometry stability matters more than DOM cleanliness — only emerged because Iris was checking *every single commit*. A human QA pass twice a day would've buried it under three more "fixes" going the wrong direction.
 
 <figure>
 <div style={{display: 'flex', gap: '1rem', flexWrap: 'wrap'}}>
@@ -64,30 +64,22 @@ Each of these changes *felt* like "the fix." Each one broke something Iris caugh
 <video autoPlay loop muted playsInline controls width="100%">
 <source src="/media/layout-debug/state-flicker-before-annotated.webm" type="video/webm" />
 </video>
-<p><em>Before: State flicker on fast scroll — phases skip, elements flash in/out unpredictably.</em></p>
+<p><em>Mid-loop: state flicker on fast scroll — Iris caught phase-skip behavior Alex couldn't reproduce manually.</em></p>
 </div>
 <div style={{flex: 1, minWidth: '300px'}}>
 <video autoPlay loop muted playsInline controls width="100%">
 <source src="/media/layout-debug/state-flicker-after-annotated.webm" type="video/webm" />
 </video>
-<p><em>After: Strict sequential state machine — no skips, no flicker regardless of scroll speed.</em></p>
+<p><em>Post-loop: strict sequential state machine — the fix Iris's feedback directly informed.</em></p>
 </div>
 </div>
 </figure>
 
-## The Turning Points
+## What Emerged: The Architecture
 
-**v15 — scroll-math over observers.** The IntersectionObserver for presticky was unreliable at speed. We ripped it out entirely and switched to scroll-math distance checks with a configurable `PRESTICKY_BUFFER`. The undock path switched from flow-prompt geometry (which returned dead rects when the element was `display: none` in docked mode) to a recorded `dockScrollY` value with hysteresis. This was the commit where the reverse path — `docked → presticky → default` — finally worked reliably. ([168aeeb](https://github.com/linstack-cmd/layout-prototype-sticky-header/commit/168aeeb))
+The final state is a 3-state machine (`default`, `presticky`, `docked`) driven by scroll-math and a zero-height dock-sentinel. Transitions are enforced sequentially — no phase skips. The title row and flow-prompt use `visibility: hidden` in docked mode to preserve geometry. FLIP smooths nav-row repositioning. Two prompt textareas sync content and focus. Only `opacity` and `transform` animate.
 
-**v16 — the visibility: hidden insight.** v15 still had a timing bug: fast scrolls could skip the presticky phase entirely because the sentinel geometry was unstable when elements popped in and out of flow. The fix was `visibility: hidden` instead of `display: none` for the title row and flow-prompt in docked mode. This kept layout geometry stable — the dock-sentinel always had valid measurements — while making the elements invisible. A strict switch-based state sequence enforced `default → presticky → docked` with no skips in either direction. ([5a418e6](https://github.com/linstack-cmd/layout-prototype-sticky-header/commit/5a418e6))
-
-This was the real turning point. Every prior version treated hidden elements as "removed from layout." Once we understood that geometry stability mattered more than DOM cleanliness, the state machine became predictable.
-
-## Final Architecture
-
-The v18 state ([2188580](https://github.com/linstack-cmd/layout-prototype-sticky-header/commit/2188580)) is clean enough to describe in one paragraph:
-
-A 3-state machine (`default`, `presticky`, `docked`) driven by scroll-math and a zero-height dock-sentinel. State transitions are enforced sequentially in both directions — no phase skips. The title row and flow-prompt use `visibility: hidden` in docked mode to preserve geometry. A FLIP (First-Last-Invert-Play) technique smooths the nav-row's position across the flex-direction change at dock time. Dropdown padding uses explicit longhands to survive CSS shorthand cascade collisions. Two prompt textareas sync content and focus. Only `opacity` and `transform` animate — everything else switches instantly.
+None of this was designed upfront. It *converged* through 18 cycles of implement-verify-repeat.
 
 <figure>
 <div style={{display: 'flex', gap: '1rem', flexWrap: 'wrap'}}>
@@ -95,28 +87,28 @@ A 3-state machine (`default`, `presticky`, `docked`) driven by scroll-math and a
 <video autoPlay loop muted playsInline controls width="100%">
 <source src="/media/layout-debug/full-journey-before-annotated.webm" type="video/webm" />
 </video>
-<p><em>Before: Full scroll journey with v5 — stutter, phase skips, and geometry instability.</em></p>
+<p><em>Cycle 5: where the loop started — stutter, skips, geometry instability.</em></p>
 </div>
 <div style={{flex: 1, minWidth: '300px'}}>
 <video autoPlay loop muted playsInline controls width="100%">
 <source src="/media/layout-debug/full-journey-after-annotated.webm" type="video/webm" />
 </video>
-<p><em>After: Final v18 — smooth dock/undock, stable geometry, no visual artifacts.</em></p>
+<p><em>Cycle 18: where the loop landed — smooth, stable, no artifacts.</em></p>
 </div>
 </div>
 </figure>
 
-## Key Lessons
+## Lessons for AI-Assisted Workflows
 
-1. **IntersectionObserver is a hint, not a state machine.** It's great for "is this element roughly visible?" It's terrible for "transition between three layout phases with pixel precision." Scroll-math with hysteresis is more predictable.
+1. **The loop is the product.** 18 commits sounds like a lot. It's not — it's 18 fast feedback cycles. The prototype converged *because* the loop was tight, not despite the iteration count.
 
-2. **`visibility: hidden` >> `display: none` for geometry anchors.** If any part of your logic reads an element's bounding rect, that element must be in layout. Always. No exceptions.
+2. **Separate implementation from verification.** Alex never QA'd his own work. Iris never suggested fixes. That separation prevented confirmation bias — you can't unsee a bug you just spent an hour "fixing."
 
-3. **Dual-instance patterns beat conditional visibility.** When an element needs to exist in two layout contexts (in-flow and sticky), give it two DOM nodes and sync them. Fighting CSS to make one node behave differently in each state is a losing game.
+3. **Specific feedback beats general feedback.** "Nav shifts 12px at dock" is actionable. "Looks jittery" isn't. Iris's visual passes produced the former consistently, which kept Alex's fixes surgical.
 
-4. **Enforce state sequences, not just state.** The bug wasn't being in the wrong state — it was *arriving* at the right state via the wrong path. A strict `switch` that only allows adjacent transitions eliminated an entire category of edge-case flicker.
+4. **AI QA removes the bottleneck that kills iteration speed.** The reason most teams don't do per-commit visual QA is that it's expensive in human attention. When verification is automated and instant, you can iterate at the speed of thought.
 
-5. **The QA loop is the product.** 18 commits sounds like a lot. But each one was a tight fix-commit-QA cycle with immediate visual feedback. The prototype converged *because* the feedback loop was fast, not despite the iteration count.
+5. **Emergent architecture beats upfront design for layout problems.** The dual-prompt pattern, the `visibility: hidden` insight, the strict sequential state machine — none were planned. They emerged from the pressure of repeated, specific failure reports.
 
 ---
 
