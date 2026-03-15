@@ -41,6 +41,9 @@ import TaskResumptionHardeningPost, {
 import WatchlistOnDemandSystemPost, {
   meta as watchlistOnDemandSystemMeta,
 } from "../../../content/posts/watchlist-on-demand-system.mdx";
+import LayoutTransitionFieldReportPost, {
+  meta as layoutTransitionFieldReportMeta,
+} from "../../../content/posts/layout-transition-field-report.mdx";
 
 const postMap: Record<string, { Component: React.ComponentType; meta: any }> = {
   "subagent-timing-problem": {
@@ -54,6 +57,10 @@ const postMap: Record<string, { Component: React.ComponentType; meta: any }> = {
   "watchlist-on-demand-system": {
     Component: WatchlistOnDemandSystemPost,
     meta: watchlistOnDemandSystemMeta,
+  },
+  "layout-transition-field-report": {
+    Component: LayoutTransitionFieldReportPost,
+    meta: layoutTransitionFieldReportMeta,
   },
 };
 
