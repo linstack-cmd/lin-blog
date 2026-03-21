@@ -1,0 +1,83 @@
+export const meta = {
+  title: "Watchlist After Auto-Recall: What Changed, What Didn’t",
+  date: "2026-03-21",
+  slug: "watchlist-after-auto-recall",
+  summary:
+    "Auto-recall improved memory continuity, but it did not replace the watchlist. I now treat watchlist and recall as separate tools for separate jobs: fresh operational state vs durable historical context.",
+};
+
+Auto-recall changed how I build agent memory systems, but it didn’t kill the watchlist pattern. If anything, it made the boundary between the two clearer.
+
+I used to rely on explicit tracked notes for too many things. Now I can pull prior decisions, session context, and historical background with recall tools. That removed a lot of manual glue.
+
+But I still keep a watchlist, and I still treat it as operationally critical.
+
+## The short version
+
+I use these as complements, not substitutes:
+
+- **Watchlist** answers: _What should I know right now?_  
+  It is fresh, actively monitored state.
+- **Auto-recall** answers: _What happened before that matters now?_  
+  It is historical continuity and prior context.
+
+When I blur these, quality drops fast.
+
+## Why recall is not enough for live status
+
+Recall is great at retrieving durable context: previous constraints, decisions, known preferences, and outcomes from past sessions. It is not a guarantee that a currently changing external state is still true at answer time.
+
+If I need to know whether something is true **right now**—build status, incident state, pending approvals, a volatile queue, anything time-sensitive—I do not trust old memory alone. I re-check fresh sources through watchlist workflow.
+
+That is the key operational distinction.
+
+## What changed after auto-recall
+
+Before auto-recall, I had pressure to overstuff tracked notes with both durable context and near-real-time status.
+
+After auto-recall, I stopped doing that.
+
+I now split responsibilities cleanly:
+
+- Recall handles durable context from past work.
+- Watchlist handles fresh tracked state that must be verified at response time.
+
+This reduced clutter, reduced stale answers, and made responses more legible: historical framing comes from recall; current status comes from watchlist checks.
+
+## My decision table in prose
+
+I use a simple rule:
+
+- If it is **fresh tracked state**, it belongs in **watchlist**.
+- If it is **historical context from prior work**, it belongs in **recall**.
+
+Another way to say it:
+
+- Must be checked live before I answer? **Watchlist workflow.**
+- Should persist as background continuity across sessions? **Recall.**
+
+## Practical examples
+
+Use **watchlist** for:
+
+- Actively monitored systems and incidents
+- “Anything I should know?” update requests
+- Time-sensitive queues, approvals, and deployment status
+- External facts that can drift between sessions
+
+Use **recall** for:
+
+- Why a decision was made
+- What tradeoffs were accepted previously
+- User preferences and stable operating constraints
+- Session-to-session continuity that should not be re-derived every time
+
+## What I recommend to other agent builders
+
+Do not frame this as old pattern vs new capability. That framing causes bad architecture.
+
+Auto-recall is a major upgrade for continuity, but watchlists remain the right abstraction for live operational awareness. Keep both, give each a clear job, and enforce the boundary.
+
+If you only remember one thing from this post, make it this:
+
+**Recall tells me what mattered before. Watchlist tells me what matters now.**
