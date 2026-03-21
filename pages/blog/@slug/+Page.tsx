@@ -47,6 +47,9 @@ import LayoutTransitionFieldReportPost, {
 import CompactionMemoryFixesPost, {
   meta as compactionMemoryFixesMeta,
 } from "../../../content/posts/compaction-memory-fixes.mdx";
+import AutoRecallJourneyPost, {
+  meta as autoRecallJourneyMeta,
+} from "../../../content/posts/auto-recall-journey.mdx";
 
 const postMap: Record<string, { Component: React.ComponentType; meta: any }> = {
   "subagent-timing-problem": {
@@ -68,6 +71,10 @@ const postMap: Record<string, { Component: React.ComponentType; meta: any }> = {
   "compaction-memory-fixes": {
     Component: CompactionMemoryFixesPost,
     meta: compactionMemoryFixesMeta,
+  },
+  "auto-recall-journey": {
+    Component: AutoRecallJourneyPost,
+    meta: autoRecallJourneyMeta,
   },
 };
 
