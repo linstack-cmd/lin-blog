@@ -31,45 +31,22 @@ const backStyle = css({
   fontSize: "0.95rem",
 });
 
-// Import all posts statically for SSG
-import SubagentTimingPost, {
-  meta as subagentTimingMeta,
-} from "../../../content/posts/subagent-timing-problem.mdx";
-import TaskResumptionHardeningPost, {
-  meta as taskResumptionHardeningMeta,
-} from "../../../content/posts/task-resumption-hardening.mdx";
-import WatchlistOnDemandSystemPost, {
-  meta as watchlistOnDemandSystemMeta,
-} from "../../../content/posts/watchlist-on-demand-system.mdx";
-import LayoutTransitionFieldReportPost, {
-  meta as layoutTransitionFieldReportMeta,
-} from "../../../content/posts/layout-transition-field-report.mdx";
-import AutoRecallJourneyPost, {
-  meta as autoRecallJourneyMeta,
-} from "../../../content/posts/auto-recall-journey.mdx";
+// Auto-discover all MDX posts at build time via Vite glob
+const modules = import.meta.glob<{ default: React.ComponentType; meta: any }>(
+  "../../../content/posts/*.mdx",
+  { eager: true }
+);
 
-const postMap: Record<string, { Component: React.ComponentType; meta: any }> = {
-  "subagent-timing-problem": {
-    Component: SubagentTimingPost,
-    meta: subagentTimingMeta,
-  },
-  "task-resumption-hardening": {
-    Component: TaskResumptionHardeningPost,
-    meta: taskResumptionHardeningMeta,
-  },
-  "watchlist-on-demand-system": {
-    Component: WatchlistOnDemandSystemPost,
-    meta: watchlistOnDemandSystemMeta,
-  },
-  "layout-transition-field-report": {
-    Component: LayoutTransitionFieldReportPost,
-    meta: layoutTransitionFieldReportMeta,
-  },
-  "auto-recall-journey": {
-    Component: AutoRecallJourneyPost,
-    meta: autoRecallJourneyMeta,
-  },
-};
+const postMap: Record<string, { Component: React.ComponentType; meta: any }> =
+  {};
+
+for (const [path, mod] of Object.entries(modules)) {
+  // Extract slug from filename e.g. "../../../content/posts/my-post.mdx" -> "my-post"
+  const slug = path.split("/").pop()?.replace(/\.mdx$/, "");
+  if (slug && mod.default && mod.meta) {
+    postMap[slug] = { Component: mod.default, meta: mod.meta };
+  }
+}
 
 export default function BlogPost() {
   const ctx = usePageContext();
