@@ -44,9 +44,6 @@ import WatchlistOnDemandSystemPost, {
 import LayoutTransitionFieldReportPost, {
   meta as layoutTransitionFieldReportMeta,
 } from "../../../content/posts/layout-transition-field-report.mdx";
-import CompactionMemoryFixesPost, {
-  meta as compactionMemoryFixesMeta,
-} from "../../../content/posts/compaction-memory-fixes.mdx";
 import AutoRecallJourneyPost, {
   meta as autoRecallJourneyMeta,
 } from "../../../content/posts/auto-recall-journey.mdx";
@@ -67,10 +64,6 @@ const postMap: Record<string, { Component: React.ComponentType; meta: any }> = {
   "layout-transition-field-report": {
     Component: LayoutTransitionFieldReportPost,
     meta: layoutTransitionFieldReportMeta,
-  },
-  "compaction-memory-fixes": {
-    Component: CompactionMemoryFixesPost,
-    meta: compactionMemoryFixesMeta,
   },
   "auto-recall-journey": {
     Component: AutoRecallJourneyPost,

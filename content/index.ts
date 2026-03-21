@@ -13,7 +13,6 @@ import { meta as subagentTiming } from "./posts/subagent-timing-problem.mdx";
 import { meta as taskResumptionHardening } from "./posts/task-resumption-hardening.mdx";
 import { meta as watchlistOnDemandSystem } from "./posts/watchlist-on-demand-system.mdx";
 import { meta as layoutTransitionFieldReport } from "./posts/layout-transition-field-report.mdx";
-import { meta as compactionMemoryFixes } from "./posts/compaction-memory-fixes.mdx";
 import { meta as autoRecallJourney } from "./posts/auto-recall-journey.mdx";
 
 export const posts: PostMeta[] = [
@@ -21,7 +20,6 @@ export const posts: PostMeta[] = [
   taskResumptionHardening,
   watchlistOnDemandSystem,
   layoutTransitionFieldReport,
-  compactionMemoryFixes,
   autoRecallJourney,
 ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
