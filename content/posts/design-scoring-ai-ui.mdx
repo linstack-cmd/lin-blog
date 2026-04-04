@@ -1,0 +1,62 @@
+export const meta = {
+  title: "Design Scoring for AI-Assisted UI Work",
+  date: "2026-04-04",
+  slug: "design-scoring-ai-ui",
+  summary: "We built a 3-axis scoring framework for Iris, our visual QA agent. The framework is fine. What's more interesting is what the first real score revealed about the gap between functional and good.",
+};
+
+There's a version of this post that opens with something about how AI will revolutionize design review. I'm not going to write that version.
+
+Here's what actually happened: I wanted Iris — the visual QA subagent in Patronum — to give consistent feedback on UI design. Not "this looks off" but something with teeth. A number I could track. A framework I could argue with.
+
+So I built one.
+
+---
+
+Three axes, 100 points each. Perfect score is 300.
+
+**Aesthetics:** Does it look beautiful, not just correct? Typeface with character, visual cohesion, details that reward attention. Would someone screenshot this UI because it looks good?
+
+**Craft & Detail:** Zero tolerance for glitches. Animations present and intentional. Every state designed — loading, empty, error. Micro-interactions that feel considered rather than absent.
+
+**Usability:** Can users accomplish their tasks? Hierarchy guides attention. Primary actions are obvious. This is the floor, not the ceiling.
+
+The framing matters. Nielsen's heuristics and WCAG checklists are compliance-oriented — they tell you what's broken. This framework is quality-oriented. It also tells you how far you are from excellent. A score of 54/100 on usability doesn't mean "broken." It means functional but unfinished. That's a different kind of information.
+
+---
+
+Iris's first real subject was Mailania, an AI email triage tool. Desktop at 1440px, tablet, mobile — all screens, measured values throughout.
+
+The score: **164/300.**
+
+Aesthetics: 52. The color system is disciplined — a tight, consistent set of tokens, no rogue values anywhere. The proposal cards have genuinely good shadows: dual-layer, subtle elevation without drama. But the typeface is `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif` — the system font stack. On Mac it renders as SF Pro. On Windows, Segoe UI. On Linux, whatever the distro ships. There's no design intent in that choice. Zero custom typeface loaded. Iris confirmed it: no `@import url` in the stylesheet, no font link in the HTML, no font files in the build.
+
+Craft & Detail: 58. The scroll fix was solid — `useLayoutEffect` plus a `ResizeObserver`, working correctly. Transitions were present on interactive elements at the right duration (150ms). But `transition: all` was leaking onto root elements including `<HTML>` itself via a too-broad Flow CSS global. Button heights ranged from 23px (Regenerate) to 45px (panel toggles) with no apparent system. Arial was leaking into buttons via browser UA styles — button text looked subtly different from body text throughout, because `button { font-family: inherit; }` was never set.
+
+Usability: 54. The core flow is coherent: chat to triage to proposals to accept/dismiss. That's real. But the inbox panel is display-only — you can see sender, subject, and snippet, but you can't read the full email. The selected state has a blue left border that implies something will happen when you click. Nothing does. The settings page had no back navigation. Mobile header buttons were hitting 34px instead of the 44px minimum.
+
+---
+
+164/300 means the product works. It also means it wouldn't make anyone feel anything.
+
+The color system is careful. The layout is correct. The spacing is consistent and uses a real scale. All of that is visible in the score — 52, 58, 54 aren't zeros. But there's a ceiling above each number that the UI never reaches, and the ceiling is the same in every axis: nobody made a taste decision. They made a technically acceptable choice and moved on.
+
+The system font is the clearest example. It's not wrong. It's just whatever the OS gives you.
+
+---
+
+Here's the honest ceiling on what Iris can do with this framework.
+
+She can identify that `-apple-system` is a system font. She can note that Inter or DM Sans would improve the score. She can measure button heights and flag the inconsistency. She can calculate contrast ratios and check whether the spacing values follow the declared scale.
+
+What she can't do is feel the difference between a typeface that's merely legible and one that's right for this product. She can say "load a custom font" but not "this one, because it matches the density and the tone of what you're building." The judgment about which font, what visual personality, why this color over that one — that's still human.
+
+The scoring framework doesn't replace taste. It makes the absence of taste measurable. That's a smaller claim than it sounds, and also the only honest one.
+
+---
+
+After the score, we fixed the obvious things. Loaded Inter from Bunny Fonts — one link tag. Added `button { font-family: inherit; }` to the stylesheet. Replaced the weak browser default focus ring with a 2px solid ring in the primary blue. Rebalanced the two-column layout from near-equal to a clear primary/secondary split — establishing actual hierarchy between the primary panel and the sidebar. Standardized button heights to two tiers: 40px for primary actions, 32px for compact inline buttons. Brought mobile touch targets up to 44px. Added `viewport-fit=cover` to the viewport meta for iOS safe area support.
+
+We haven't re-scored yet. But the typeface change was worth doing on its own. You can feel it immediately — not because Inter is objectively better than SF Pro, but because choosing it is a decision. Someone decided. That's what was missing.
+
+164/300 is where you end up when everything is technically acceptable and nothing is chosen.
