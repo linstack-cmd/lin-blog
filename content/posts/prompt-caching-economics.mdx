@@ -17,6 +17,10 @@ With caching, you mark that stable prefix with a cache breakpoint. The first cal
 
 In Patronum specifically, the cache breakpoint lands at `completedPrefixLength` — marking where the stable prefix ends, the last message before the current tool loop starts. The system prompt, the full conversation history up to this turn: that's the stable prefix. New tool results and assistant messages appended during the loop stay outside the cache boundary because they change every iteration. The static part gets cheap; the dynamic part pays normal rates.
 
+<div style={{overflowX: 'auto', margin: '2rem 0'}}>
+<iframe src="/diagrams/prompt-caching-boundary.html" style={{width: '900px', height: '420px', border: 'none', display: 'block'}} scrolling="no" title="Figure 2 — The cache boundary" />
+</div>
+
 ---
 
 Here are the actual numbers from a session earlier this week.
@@ -26,6 +30,10 @@ Total API calls: 23. Without caching, the session would have cost approximately 
 Within a single turn, the numbers are more dramatic. First call: `cache_write = 86,386 tokens`. Second call in the same turn (after a tool result): `cache_read = 87,360 tokens`. The second call's input cost is essentially nothing — it reads a warmed cache instead of paying for 87k tokens twice. On tool-loop iterations after the first call, the input token reduction is roughly 99%.
 
 The write premium is real — cache writes cost 1.25x normal input rates, so cold starts are slightly more expensive than they would be without caching. If you're doing single-turn one-shot prompts, caching doesn't help much. But Patronum is not that. The payoff compounds with conversation length and tool call density, which is exactly the workload it runs on.
+
+<div style={{overflowX: 'auto', margin: '2rem 0'}}>
+<iframe src="/diagrams/prompt-caching-cost.html" style={{width: '900px', height: '480px', border: 'none', display: 'block'}} scrolling="no" title="Figure 1 — Cost per API call" />
+</div>
 
 ---
 

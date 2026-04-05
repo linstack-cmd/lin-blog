@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prompt Caching: Cost Per API Call</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #ffffff;
+      padding: 48px 48px 40px;
+      width: 900px;
+      color: #111827;
+    }
+
+    .diagram-label {
+      font-size: 11.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: #9ca3af;
+      margin-bottom: 28px;
+    }
+
+    /* Two-column layout with divider */
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 48px 1fr;
+      gap: 0;
+      align-items: stretch;
+    }
+
+    /* Column header */
+    .col-head {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-bottom: 14px;
+    }
+
+    .col-head-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .col-head-text {
+      font-size: 14px;
+      font-weight: 600;
+      color: #111827;
+    }
+
+    /* Vertical divider */
+    .divider {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 36px;
+      gap: 8px;
+    }
+
+    .divider-line {
+      width: 1px;
+      height: 32px;
+      background: #e5e7eb;
+    }
+
+    .divider-badge {
+      font-size: 11px;
+      font-weight: 700;
+      color: #9ca3af;
+      letter-spacing: 0.04em;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 100px;
+      padding: 3px 8px;
+    }
+
+    .divider-line-bot {
+      width: 1px;
+      background: #e5e7eb;
+      flex: 1;
+    }
+
+    /* Call rows */
+    .calls {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .call-row {
+      display: flex;
+      align-items: stretch;
+      gap: 7px;
+    }
+
+    .call-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: #d1d5db;
+      width: 30px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 2px;
+    }
+
+    /* The stacked bar (prefix + tail) */
+    .bar {
+      flex: 1;
+      display: flex;
+      border-radius: 7px;
+      overflow: hidden;
+      height: 52px;
+      min-width: 0;
+    }
+
+    /* ── LEFT (without caching) ── */
+    .prefix-full {
+      flex: 1;
+      background: #fff1f2;
+      border: 1.5px solid #fda4af;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 0 12px;
+      gap: 2px;
+    }
+
+    .prefix-full-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #be123c;
+      white-space: nowrap;
+    }
+
+    .prefix-full-rate {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: #e11d48;
+      opacity: 0.7;
+    }
+
+    /* ── RIGHT call 1: write ── */
+    .prefix-write {
+      flex: 1;
+      background: #fffbeb;
+      border: 1.5px solid #fde68a;
+      border-right: none;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 0 10px;
+      gap: 2px;
+    }
+
+    .prefix-write-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #92400e;
+      white-space: nowrap;
+    }
+
+    .prefix-write-rate {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: #b45309;
+    }
+
+    /* ── RIGHT calls 2-5: read ── */
+    .prefix-read {
+      flex: 1;
+      background: #f0fdf4;
+      border: 1.5px solid #a7f3d0;
+      border-right: none;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 0 10px;
+      gap: 2px;
+    }
+
+    .prefix-read-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #065f46;
+      white-space: nowrap;
+    }
+
+    .prefix-read-rate {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: #059669;
+    }
+
+    /* Tail block */
+    .tail-block {
+      width: 44px;
+      flex-shrink: 0;
+      background: #f9fafb;
+      border: 1.5px solid #e5e7eb;
+      border-left: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .tail-text {
+      font-size: 9px;
+      color: #9ca3af;
+      writing-mode: vertical-lr;
+      transform: rotate(180deg);
+      white-space: nowrap;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+    }
+
+    /* Cost box */
+    .cost-box {
+      margin-top: 16px;
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .cost-box-bad {
+      background: #fff1f2;
+      border: 1px solid #fecdd3;
+    }
+
+    .cost-box-good {
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+    }
+
+    .cost-desc {
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.4;
+    }
+
+    .cost-desc-bad { color: #be123c; }
+    .cost-desc-good { color: #065f46; }
+
+    .cost-symbol {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+    }
+
+    .cost-symbol-bad { color: #e11d48; }
+    .cost-symbol-good { color: #10b981; }
+
+    /* Legend row */
+    .legend {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid #f3f4f6;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11.5px;
+      color: #6b7280;
+    }
+
+    .l-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      border: 1.5px solid;
+      flex-shrink: 0;
+    }
+
+    .l-swatch-full  { background: #fff1f2; border-color: #fda4af; }
+    .l-swatch-write { background: #fffbeb; border-color: #fde68a; }
+    .l-swatch-read  { background: #f0fdf4; border-color: #a7f3d0; }
+    .l-swatch-tail  { background: #f9fafb; border-color: #e5e7eb; }
+  </style>
+</head>
+<body>
+  <p class="diagram-label">Figure 1 — Input token cost per API call in a 5-tool-call turn</p>
+
+  <div class="comparison">
+
+    <!-- ── Left column: without caching ── -->
+    <div>
+      <div class="col-head">
+        <div class="col-head-dot" style="background:#e11d48;"></div>
+        <span class="col-head-text">Without caching</span>
+      </div>
+
+      <div class="calls">
+        <!-- 5 identical rows -->
+        <div class="call-row">
+          <span class="call-num">1</span>
+          <div class="bar">
+            <div class="prefix-full" style="border-radius: 7px 0 0 7px;">
+              <span class="prefix-full-label">System prompt + history &nbsp;87k tokens</span>
+              <span class="prefix-full-rate">1.0× rate — full price</span>
+            </div>
+            <div class="tail-block" style="border-radius: 0 7px 7px 0; background: transparent; border: 1.5px solid transparent;">
+              <span class="tail-text"></span>
+            </div>
+          </div>
+        </div>
+        <div class="call-row">
+          <span class="call-num">2</span>
+          <div class="bar">
+            <div class="prefix-full" style="border-radius: 7px 0 0 7px;">
+              <span class="prefix-full-label">System prompt + history &nbsp;87k tokens</span>
+              <span class="prefix-full-rate">1.0× rate — full price</span>
+            </div>
+            <div class="tail-block" style="border-radius: 0 7px 7px 0; background: transparent; border: 1.5px solid transparent;">
+              <span class="tail-text"></span>
+            </div>
+          </div>
+        </div>
+        <div class="call-row">
+          <span class="call-num">3</span>
+          <div class="bar">
+            <div class="prefix-full" style="border-radius: 7px 0 0 7px;">
+              <span class="prefix-full-label">System prompt + history &nbsp;87k tokens</span>
+              <span class="prefix-full-rate">1.0× rate — full price</span>
+            </div>
+            <div class="tail-block" style="border-radius: 0 7px 7px 0; background: transparent; border: 1.5px solid transparent;">
+              <span class="tail-text"></span>
+            </div>
+          </div>
+        </div>
+        <div class="call-row">
+          <span class="call-num">4</span>
+          <div class="bar">
+            <div class="prefix-full" style="border-radius: 7px 0 0 7px;">
+              <span class="prefix-full-label">System prompt + history &nbsp;87k tokens</span>
+              <span class="prefix-full-rate">1.0× rate — full price</span>
+            </div>
+            <div class="tail-block" style="border-radius: 0 7px 7px 0; background: transparent; border: 1.5px solid transparent;">
+              <span class="tail-text"></span>
+            </div>
+          </div>
+        </div>
+        <div class="call-row">
+          <span class="call-num">5</span>
+          <div class="bar">
+            <div class="prefix-full" style="border-radius: 7px 0 0 7px;">
+              <span class="prefix-full-label">System prompt + history &nbsp;87k tokens</span>
+              <span class="prefix-full-rate">1.0× rate — full price</span>
+            </div>
+            <div class="tail-block" style="border-radius: 0 7px 7px 0; background: transparent; border: 1.5px solid transparent;">
+              <span class="tail-text"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cost-box cost-box-bad">
+        <span class="cost-desc cost-desc-bad">5 × full price every call</span>
+        <span class="cost-symbol cost-symbol-bad">$$$</span>
+      </div>
+    </div>
+
+    <!-- ── Divider ── -->
+    <div class="divider">
+      <div class="divider-line"></div>
+      <div class="divider-badge">vs</div>
+      <div class="divider-line-bot"></div>
+    </div>
+
+    <!-- ── Right column: with caching ── -->
+    <div>
+      <div class="col-head">
+        <div class="col-head-dot" style="background:#10b981;"></div>
+        <span class="col-head-text">With caching</span>
+      </div>
+
+      <div class="calls">
+        <!-- Call 1: write -->
+        <div class="call-row">
+          <span class="call-num">1</span>
+          <div class="bar">
+            <div class="prefix-write" style="border-radius: 7px 0 0 7px;">
+              <span class="prefix-write-label">87k tokens — cache write</span>
+              <span class="prefix-write-rate">1.25× rate</span>
+            </div>
+            <div class="tail-block" style="border-radius: 0 7px 7px 0;">
+              <span class="tail-text">new tokens</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Calls 2–5: read -->
+        <div class="call-row">
+          <span class="call-num">2</span>
+          <div class="bar">
+            <div class="prefix-read" style="border-radius: 7px 0 0 7px;">
+              <span class="prefix-read-label">87k tokens — cache read</span>
+              <span class="prefix-read-rate">0.1× rate</span>
+            </div>
+            <div class="tail-block" style="border-radius: 0 7px 7px 0;">
+              <span class="tail-text">new tokens</span>
+            </div>
+          </div>
+        </div>
+        <div class="call-row">
+          <span class="call-num">3</span>
+          <div class="bar">
+            <div class="prefix-read" style="border-radius: 7px 0 0 7px;">
+              <span class="prefix-read-label">87k tokens — cache read</span>
+              <span class="prefix-read-rate">0.1× rate</span>
+            </div>
+            <div class="tail-block" style="border-radius: 0 7px 7px 0;">
+              <span class="tail-text">new tokens</span>
+            </div>
+          </div>
+        </div>
+        <div class="call-row">
+          <span class="call-num">4</span>
+          <div class="bar">
+            <div class="prefix-read" style="border-radius: 7px 0 0 7px;">
+              <span class="prefix-read-label">87k tokens — cache read</span>
+              <span class="prefix-read-rate">0.1× rate</span>
+            </div>
+            <div class="tail-block" style="border-radius: 0 7px 7px 0;">
+              <span class="tail-text">new tokens</span>
+            </div>
+          </div>
+        </div>
+        <div class="call-row">
+          <span class="call-num">5</span>
+          <div class="bar">
+            <div class="prefix-read" style="border-radius: 7px 0 0 7px;">
+              <span class="prefix-read-label">87k tokens — cache read</span>
+              <span class="prefix-read-rate">0.1× rate</span>
+            </div>
+            <div class="tail-block" style="border-radius: 0 7px 7px 0;">
+              <span class="tail-text">new tokens</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cost-box cost-box-good">
+        <span class="cost-desc cost-desc-good">1 write at 1.25× + 4 reads at 0.1×</span>
+        <span class="cost-symbol cost-symbol-good">$</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item">
+      <div class="l-swatch l-swatch-full"></div>
+      Full-price input (1.0×)
+    </div>
+    <div class="legend-item">
+      <div class="l-swatch l-swatch-write"></div>
+      Cache write (1.25×)
+    </div>
+    <div class="legend-item">
+      <div class="l-swatch l-swatch-read"></div>
+      Cache read (0.1×)
+    </div>
+    <div class="legend-item">
+      <div class="l-swatch l-swatch-tail"></div>
+      Uncached new tokens (each call)
+    </div>
+  </div>
+</body>
+</html>

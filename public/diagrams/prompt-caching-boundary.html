@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prompt Caching: The Cache Boundary</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #ffffff;
+      padding: 56px 48px 44px;
+      width: 900px;
+      color: #111827;
+    }
+
+    .diagram-label {
+      font-size: 11.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: #9ca3af;
+      margin-bottom: 40px;
+    }
+
+    /* ── Outer wrapper: two colored zones ── */
+    .timeline-outer {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      position: relative;
+    }
+
+    /* Cached zone */
+    .zone-cached {
+      display: flex;
+      align-items: stretch;
+      gap: 5px;
+      background: #eff6ff;
+      border-radius: 10px 0 0 10px;
+      border: 1.5px solid #bfdbfe;
+      padding: 14px 14px 14px 14px;
+      flex: 55;
+    }
+
+    /* Boundary column */
+    .zone-boundary {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: stretch;
+      position: relative;
+      flex-shrink: 0;
+      width: 44px;
+      background: white;
+      z-index: 10;
+      margin-left: -1.5px;
+      margin-right: -1.5px;
+    }
+
+    /* Boundary label above */
+    .boundary-pill {
+      position: absolute;
+      top: -34px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #4f46e5;
+      color: white;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px;
+      font-weight: 600;
+      padding: 4px 9px;
+      border-radius: 5px;
+      white-space: nowrap;
+      letter-spacing: 0.01em;
+    }
+
+    .boundary-arrow {
+      position: absolute;
+      top: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-top: 6px solid #4f46e5;
+    }
+
+    .boundary-dashes {
+      width: 2px;
+      height: 100%;
+      background: repeating-linear-gradient(
+        to bottom,
+        #818cf8 0px,
+        #818cf8 7px,
+        transparent 7px,
+        transparent 13px
+      );
+    }
+
+    /* Uncached zone */
+    .zone-uncached {
+      display: flex;
+      align-items: stretch;
+      gap: 5px;
+      background: #fafafa;
+      border-radius: 0 10px 10px 0;
+      border: 1.5px solid #e5e7eb;
+      padding: 14px 14px 14px 14px;
+      flex: 45;
+    }
+
+    /* ── Message blocks ── */
+    .msg {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 7px;
+      border: 1.5px solid;
+      padding: 10px 6px;
+      text-align: center;
+      min-height: 88px;
+      position: relative;
+    }
+
+    .msg-icon {
+      font-size: 14px;
+      margin-bottom: 5px;
+      line-height: 1;
+    }
+
+    .msg-name {
+      font-size: 10.5px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .msg-sub {
+      font-size: 9.5px;
+      font-weight: 400;
+      margin-top: 3px;
+      opacity: 0.8;
+    }
+
+    /* System prompt block — darker blue */
+    .msg-system {
+      background: #dbeafe;
+      border-color: #93c5fd;
+      flex: 1.3;
+    }
+    .msg-system .msg-name { color: #1e3a8a; }
+    .msg-system .msg-sub  { color: #3b82f6; }
+
+    /* History blocks */
+    .msg-history {
+      background: #eff6ff;
+      border-color: #bfdbfe;
+      flex: 1;
+    }
+    .msg-history .msg-name { color: #1d4ed8; }
+    .msg-history .msg-sub  { color: #60a5fa; }
+
+    /* Tool result blocks */
+    .msg-tool {
+      background: #f9fafb;
+      border-color: #e5e7eb;
+      flex: 1;
+    }
+    .msg-tool .msg-name { color: #4b5563; }
+    .msg-tool .msg-sub  { color: #9ca3af; }
+
+    /* Assistant blocks */
+    .msg-assistant {
+      background: #f3f4f6;
+      border-color: #d1d5db;
+      flex: 1;
+    }
+    .msg-assistant .msg-name { color: #374151; }
+    .msg-assistant .msg-sub  { color: #9ca3af; }
+
+    /* ── Under-zone labels ── */
+    .zone-labels {
+      display: flex;
+      margin-top: 12px;
+      gap: 0;
+    }
+
+    .zone-label-cached {
+      flex: 55;
+      padding-left: 4px;
+    }
+
+    .zone-label-gap {
+      flex-shrink: 0;
+      width: 44px;
+    }
+
+    .zone-label-uncached {
+      flex: 45;
+      padding-left: 4px;
+    }
+
+    .zone-label-title {
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .zone-label-cached .zone-label-title { color: #1d4ed8; }
+    .zone-label-uncached .zone-label-title { color: #6b7280; }
+
+    .zone-label-body {
+      font-size: 11px;
+      margin-top: 3px;
+      line-height: 1.4;
+    }
+
+    .zone-label-cached .zone-label-body { color: #60a5fa; }
+    .zone-label-uncached .zone-label-body { color: #9ca3af; }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 28px;
+      padding-top: 18px;
+      border-top: 1px solid #f3f4f6;
+    }
+
+    .legend-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #d1d5db;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11.5px;
+      color: #6b7280;
+    }
+
+    .l-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      border: 1.5px solid;
+      flex-shrink: 0;
+    }
+
+    .l-swatch-system    { background: #dbeafe; border-color: #93c5fd; }
+    .l-swatch-history   { background: #eff6ff; border-color: #bfdbfe; }
+    .l-swatch-tool      { background: #f9fafb; border-color: #e5e7eb; }
+    .l-swatch-assistant { background: #f3f4f6; border-color: #d1d5db; }
+
+    .l-dash {
+      width: 20px;
+      height: 0;
+      border-bottom: 2.5px dashed #818cf8;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <p class="diagram-label">Figure 2 — The cache boundary: stable prefix vs. tool loop</p>
+
+  <div class="timeline-outer">
+
+    <!-- ── Cached zone ── -->
+    <div class="zone-cached">
+      <!-- System prompt -->
+      <div class="msg msg-system">
+        <span class="msg-icon">⬡</span>
+        <span class="msg-name">System<br>Prompt</span>
+      </div>
+      <!-- History 1 -->
+      <div class="msg msg-history">
+        <span class="msg-icon">💬</span>
+        <span class="msg-name">History</span>
+        <span class="msg-sub">msg 1</span>
+      </div>
+      <!-- History 2 -->
+      <div class="msg msg-history">
+        <span class="msg-icon">💬</span>
+        <span class="msg-name">History</span>
+        <span class="msg-sub">msg 2</span>
+      </div>
+      <!-- History 3 -->
+      <div class="msg msg-history">
+        <span class="msg-icon">💬</span>
+        <span class="msg-name">History</span>
+        <span class="msg-sub">msg 3</span>
+      </div>
+    </div>
+
+    <!-- ── Boundary ── -->
+    <div class="zone-boundary">
+      <div class="boundary-pill">completedPrefixLength</div>
+      <div class="boundary-arrow"></div>
+      <div class="boundary-dashes" style="height: 100%;"></div>
+    </div>
+
+    <!-- ── Uncached zone ── -->
+    <div class="zone-uncached">
+      <!-- Tool result 1 -->
+      <div class="msg msg-tool">
+        <span class="msg-icon">🔧</span>
+        <span class="msg-name">Tool<br>Result</span>
+        <span class="msg-sub">iter 1</span>
+      </div>
+      <!-- Assistant 1 -->
+      <div class="msg msg-assistant">
+        <span class="msg-icon">✦</span>
+        <span class="msg-name">Assistant</span>
+        <span class="msg-sub">iter 1</span>
+      </div>
+      <!-- Tool result 2 -->
+      <div class="msg msg-tool">
+        <span class="msg-icon">🔧</span>
+        <span class="msg-name">Tool<br>Result</span>
+        <span class="msg-sub">iter 2</span>
+      </div>
+      <!-- Assistant 2 -->
+      <div class="msg msg-assistant">
+        <span class="msg-icon">✦</span>
+        <span class="msg-name">Assistant</span>
+        <span class="msg-sub">iter 2</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Under-zone labels -->
+  <div class="zone-labels">
+    <div class="zone-label-cached">
+      <div class="zone-label-title">
+        Stable Prefix — cached
+      </div>
+      <div class="zone-label-body">Paid once per cache write. Reads cost 0.1×.</div>
+    </div>
+    <div class="zone-label-gap"></div>
+    <div class="zone-label-uncached">
+      <div class="zone-label-title">
+        <span>↻</span> Tool Loop — uncached
+      </div>
+      <div class="zone-label-body">New each iteration. Full rate on every call.</div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <span class="legend-label">Legend</span>
+    <div class="legend-item">
+      <div class="l-swatch l-swatch-system"></div>
+      System prompt
+    </div>
+    <div class="legend-item">
+      <div class="l-swatch l-swatch-history"></div>
+      History messages
+    </div>
+    <div class="legend-item">
+      <div class="l-swatch l-swatch-tool"></div>
+      Tool result
+    </div>
+    <div class="legend-item">
+      <div class="l-swatch l-swatch-assistant"></div>
+      Assistant
+    </div>
+    <div class="legend-item">
+      <div class="l-dash"></div>
+      Cache boundary
+    </div>
+  </div>
+
+</body>
+</html>
+ry
+    </div>
+  </div>
+
+</body>
+</html>
