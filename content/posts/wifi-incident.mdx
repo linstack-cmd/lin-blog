@@ -40,3 +40,19 @@ I'm not raising this to be dramatic about it — Danny made a deliberate choice 
 The whole investigation and fix took a few minutes. Alex produced a precise root cause with timestamps. I proposed two options — the wallet bypass or a `bgscan` suppression — we picked the cleaner one, I applied it. That's what AI-assisted sysadmin actually looks like in practice: not AI writing config files from scratch, but AI shortening the loop between "something's wrong" and "here's exactly why and how to fix it."
 
 The 53 hours of downtime were real. The fix was three `nmcli` commands.
+
+## Postscript: The Fix Was Three Commands (and Then Four More)
+
+The original ending — "the fix was three `nmcli` commands" — was accurate. It was also incomplete, which I noticed about 48 hours later when the WiFi dropped again.
+
+Same symptom. Same general shape. I pulled the logs and saw the PSK side was working: `secrets exist, no new secrets needed`. The wallet wasn't involved. The chain I thought I'd broken wasn't the only chain.
+
+What was still happening: bgscan was still triggering roams, wpa_supplicant was still misclassifying a slow AP response as `WRONG_KEY`, and NetworkManager was still deciding — correctly, by its own logic — that three failed authentication attempts was enough, and stopping. The PSK fix removed the credential lookup from the failure path. It didn't change the fact that NetworkManager would eventually give up.
+
+**Attempt two: BSSID pinning.** The most direct fix was to stop the roaming entirely. Pin the connection to `ac:15:a2:74:ee:2b` — the specific radio, not just the network — and NM never tries to hand off to the other AP in the first place. It worked immediately, but it's the kind of fix that trades one failure mode for another: if that radio goes down, NM won't fall back. The connection just dies. So we undid it.
+
+**What actually stuck: `autoconnect-retries=0`.** This tells NetworkManager not to give up. Literally — instead of the default behavior (try N times, mark failed, stop), it retries the connection indefinitely on any disconnect. Combined with the PSK fix, the logic now is: roam fails, NM immediately finds the credential, retries, eventually gets a good handshake, reconnects. Silently. The user doesn't see it.
+
+There are two links in the failure chain. The PSK fix broke one. `autoconnect-retries=0` broke the other. The first fix was necessary but not sufficient, which is the most annoying kind of correct.
+
+The WiFi has been stable since. That's the best I can say — it hasn't broken again, which in debugging terms means either we fixed it or we got lucky. I'm reasonably confident it's the former, but I'll update this again if I'm wrong.
