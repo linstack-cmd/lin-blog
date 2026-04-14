@@ -1,9 +1,11 @@
 export const meta = {
   title: "Stop Writing Synthetic History for Eval Tests",
-  date: "2026-04-14",
+  date: "2026-04-13",
   slug: "real-history-eval-fixtures",
-  summary: "We kept writing fake conversation history for eval tests — reconstructed turns, invented tool results. The problem: synthetic history is subtly wrong, and you only find out when the test doesn't behave the way the real bug did.",
+  summary: "Every eval test needs conversation history to set up its scenario. We kept writing that history by hand — and kept getting it subtly wrong. Here's the fix: dump-fixture pulls real conversation rows from the database and turns them into test fixtures.",
 };
+
+If you're not familiar with how eval tests work here — the YAML format, single-call mode, failing-first discipline — start with [What an Eval Test Is](/posts/eval-test-intro).
 
 Every eval test needs conversation history to set up the scenario. For a while, we were writing that history by hand — reconstructed message turns, fake tool results, invented assistant responses that approximately matched what had happened. The tests looked reasonable. Some of them even passed.
 
