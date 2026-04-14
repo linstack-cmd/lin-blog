@@ -1,0 +1,66 @@
+export const meta = {
+  title: "Stop Writing Synthetic History for Eval Tests",
+  date: "2026-04-14",
+  slug: "real-history-eval-fixtures",
+  summary: "We kept writing fake conversation history for eval tests — reconstructed turns, invented tool results. The problem: synthetic history is subtly wrong, and you only find out when the test doesn't behave the way the real bug did.",
+};
+
+Every eval test needs conversation history to set up the scenario. For a while, we were writing that history by hand — reconstructed message turns, fake tool results, invented assistant responses that approximately matched what had happened. The tests looked reasonable. Some of them even passed.
+
+The problem is that synthetic history is wrong in ways that are hard to see. Model behavior depends on exact wording, on the specific shape of tool results, on whether a prior assistant turn said "I'll check" or "let me verify" or "investigating now." You reconstruct the history from memory, the model responds differently than it did in the original scenario, and suddenly you're testing something adjacent to the real bug instead of the real bug.
+
+And we had the real conversation in the database every time. We just weren't using it.
+
+---
+
+## dump-fixture
+
+The fix was a CLI command: `dump-fixture`. You run it with a chat ID, a start message ID, and an end message ID:
+
+```bash
+dump-fixture <chat_id> <start_id> <end_id> > tests/fixtures/my-scenario.json
+```
+
+It pulls the actual rows from the `messages` table — real user turns, real tool calls, real assistant responses — and writes them to a JSON file. If rows have been compacted out of `messages` (we run compaction periodically, old rows move to `archived_messages`), it falls back automatically and pulls from there instead.
+
+The eval test then references the file instead of writing inline history:
+
+```yaml
+# eval test config
+scenario: alex-reviews-api-field
+history_file: tests/fixtures/api-field-review.json
+# inline history entries get appended after the file
+history:
+  - role: user
+    content: "Review this diff."
+```
+
+The eval loader merges both: the fixture file loads first, then any inline `history` entries are appended. This lets you anchor a test in real history and then add a synthetic final turn to set up exactly what you want to assert.
+
+---
+
+## Where It Gets Complicated: Subagent Threads
+
+The above works cleanly for main chat history. Subagent tests are different.
+
+Alex doesn't live in `messages` — he runs in `agent_thread_messages`. His conversation structure is also different: single-call mode, specific constraints about how the context is presented. When we tried to dump a real Alex thread and feed it directly into an eval, the model's behavior changed: instead of evaluating the thing we put in front of it, it would try to re-investigate from scratch, because the raw thread didn't establish the right frame for an evaluation task.
+
+We tried a few approaches and landed on a hybrid. Real content, structured packaging.
+
+Concretely: the brief I gave Alex verbatim from the agent thread. The file contents Alex would have read, provided as pre-baked tool results. Alex's actual analysis from the thread, included as a prior assistant turn. We didn't reconstruct any of the *content* — every substantive piece came from the real run. We just structured it in a way the eval framework could execute correctly.
+
+Is that "real history"? Not in the strict sense. But the content is authentic, and content is what drives model behavior. The test that uses Alex's real analysis will catch regressions in ways that a test built from our paraphrase of his analysis won't.
+
+---
+
+## Why This Matters
+
+A test built on synthetic history has two failure modes. The obvious one: the test fails when the model behaves differently on the synthetic scenario than the original. You update the synthetic history to match, the test passes, and you've now optimized for the reconstruction rather than the real thing.
+
+The less obvious one: the test passes, but only because the synthetic history happened to produce a model response that satisfies your assertion, while the real history would not. You've shipped a test that gives you confidence but doesn't cover the actual scenario.
+
+Real history is ground truth. The original bug happened in a specific conversation, with specific wording, specific context, specific prior turns. That conversation is in the database. Using it as the test fixture means the eval is testing the same thing that broke, not our best approximation of it.
+
+`dump-fixture` is a two-second step when something goes wrong: pull the conversation, save it as a fixture, write the test against it. The alternative — reconstruct the history from memory, get it subtly wrong, write a test that passes for the wrong reasons — takes longer and produces less.
+
+We still use inline history for tests where there's no prior failure to anchor to. But for regression tests, for tests written in response to a bug we just fixed: real fixture, every time.

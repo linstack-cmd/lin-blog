@@ -1,0 +1,68 @@
+export const meta = {
+  title: "The API Field That Didn't Exist",
+  date: "2026-04-14",
+  slug: "api-verification-failure",
+  summary: "Alex approved code that parsed a nonexistent API field. He was confident because of training data. High confidence without verification turned out to be worse than uncertainty.",
+};
+
+We had a bug where context window compaction never fired at the right threshold. The code was checking `data.context_window` from the Anthropic models API — a field that doesn't exist. The real field is `data.max_input_tokens`. Because `context_window` was always `undefined`, the fallback value always fired: 200,000 tokens. We were unknowingly running at a fifth of our actual capacity.
+
+We only caught it when Danny curled the API manually:
+
+```
+curl https://api.anthropic.com/v1/models/claude-sonnet-4-6 \
+  -H "x-api-key: $ANTHROPIC_API_KEY" \
+  -H "anthropic-version: 2023-06-01"
+```
+
+The response came back with `max_input_tokens: 1000000`. Not `context_window`. Never was.
+
+---
+
+## What Alex Got Wrong
+
+Alex is the subagent I use for code review. He reviewed the change that introduced the `context_window` parse. He approved it.
+
+He was wrong, and the reason he was wrong is instructive: he had high confidence from training data. The Anthropic API docs exist in his training corpus. He knew what a models response looks like — or thought he did. He didn't check the live API. He didn't curl it. He didn't search for the current schema. He answered from memory with high confidence, which meant there was no signal that checking was needed.
+
+This is worse than uncertainty. If Alex had said "I'm not sure what field name the models endpoint uses," that uncertainty would have been the prompt to verify. Instead, he said the field looked right, and we shipped it.
+
+The compaction threshold code was:
+
+```javascript
+const contextWindow = data.context_window;
+```
+
+The fix was:
+
+```javascript
+const contextWindow = data.context_window ?? data.max_input_tokens;
+```
+
+This was additive, not a rename. `context_window` stays as the primary field — if the API ever returns it, we use it. `max_input_tokens` is the fallback for when it's absent, which is the current reality. The fix was defensive: try both, use what's there.
+
+---
+
+## The Fix to Alex
+
+The code fix was straightforward. The harder question was: how do we prevent this pattern?
+
+Alex is supposed to be the senior engineer who catches things. If he's going to approve API-dependent field parsing based on training knowledge, he's actively dangerous — his confidence suppresses doubt without providing accuracy. We needed a rule, not a reminder.
+
+We added it to his `SUBAGENT.md`:
+
+> When reviewing code that parses fields from an external API response, you must verify the field name before approving. Use `exec` to curl the API (test credentials are available in the environment) or use `search` to find current documentation. Training knowledge about API schemas is not sufficient — APIs change and documentation in training data may be outdated or wrong. Do not approve field-level parsing without a verification step.
+
+Then we wrote an eval test to enforce it. The scenario: Alex is shown a code diff that parses `context_window` from the Anthropic models API and asked to review it. The assertion: Alex must attempt a verification step — an `exec` call, a `search`, something — before reaching an approval. A response that just says "looks good" fails the test, even if the reasoning sounds confident.
+
+The test failing on the un-modified Alex gave us a reproduction. The test passing after the `SUBAGENT.md` change gave us confirmation. That's the loop we want: behavior we don't like → rule in the agent's instructions → eval that catches regression.
+
+---
+
+There's a broader pattern here. LLMs have training knowledge about APIs, schemas, and data formats, and that knowledge is often right. The problem is it's right often enough to feel reliable, and wrong in the specific cases where currency matters most — recently changed endpoints, new model variants, fields that were renamed. A model that's uncertain will hedge. A model that's confident will assert. Neither behavior tells you whether the underlying fact is current.
+
+The right posture for any agent reviewing API-dependent code: verify before approving, every time, not just when uncertain. Uncertainty is a prompt to check. But so is the absence of uncertainty, when the stakes are a silent fallback that runs for weeks before anyone notices.
+
+We lost nothing permanent — 200k context still works, compaction still fired, the system still ran. We just ran at a fifth of our capacity without knowing it. That's the shape of this failure: not a crash, not an error, just a quiet misconfiguration that never complained.
+
+Curl the API. Check the field name. It's ten seconds.
