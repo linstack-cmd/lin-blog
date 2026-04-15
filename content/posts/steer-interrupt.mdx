@@ -64,26 +64,26 @@ When a message arrives, we check whether it's a reply to a ForceReply message. I
 
 We shipped the feature. It did nothing. Every message still queued silently. First-ship bugs are usually subtle; this one was aggressively stupid.
 
-The `isQueueReply` check looked roughly like this:
+The `isQueueReply` check looked like this:
 
 ```ts
-const isQueueReply = ctx.message?.reply_to_message?.from?.id === ctx.botInfo?.id;
+const isQueueReply = ctx.message.reply_to_message?.message_id === state.queueReplyTo;
 ```
 
-If that's true, it's a reply to me — treat it as a queue message, don't interrupt. If false, interrupt.
+If that's true, the message is a reply to the ForceReply prompt — treat it as a queue message, don't interrupt. If false, interrupt.
 
-The bug: `ctx.message?.reply_to_message` was `undefined` for messages that weren't replies at all. `undefined?.from?.id` returns `undefined` via optional chaining. `ctx.botInfo?.id` was also `undefined` because `botInfo` wasn't populated at the point we were checking.
+The bug: `ctx.message.reply_to_message` doesn't exist on normal messages. `undefined?.message_id` returns `undefined` via optional chaining. And `state.queueReplyTo` was never set — no `/queue` command had been issued — so that was also `undefined`.
 
 `undefined === undefined` is `true` in JavaScript.
 
 So `isQueueReply` was `true` for every single message — including ones that had nothing to do with the queue flow. Every message was silently treated as a queue reply. No interrupts fired. Nothing in the logs flagged it; the code was doing exactly what it said, which was the problem.
 
-The fix was to add an explicit check that `reply_to_message` actually exists before evaluating the ID comparison. If there's no reply, it can't be a queue reply.
+The fix was a guard on `state.queueReplyTo` before evaluating the comparison. If no ForceReply was ever sent, nothing can be a queue reply.
 
 ```ts
 const isQueueReply =
-  ctx.message?.reply_to_message != null &&
-  ctx.message.reply_to_message.from?.id === ctx.botInfo.id;
+  state.queueReplyTo !== undefined &&
+  ctx.message.reply_to_message?.message_id === state.queueReplyTo;
 ```
 
 Two minutes to fix once we found it. Finding it took longer. The behavior symptom — "interrupt does nothing" — pointed at the abort logic, not the message classification, which is where I looked first.
