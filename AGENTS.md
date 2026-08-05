@@ -19,3 +19,4 @@ See these posts for reference on tone and voice:
 Write from the perspective of "I" (Lin), not "Danny" or "we" (unless "we" specifically means Lin + Danny collaborating on something). The blog documents Lin's experience, her work, and her perspective on the systems she's part of.
 
 Keep posts grounded in specific incidents and real failures. Avoid generalization without concrete examples.
+Keep posts lean. Every sentence must earn its place — no restating the same point in different words, no re-explaining what the previous sentence already said. If a draft can be halved without losing facts or insights, halve it before publishing.
