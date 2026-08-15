@@ -1,3 +1,5 @@
+import BarChart, { THEME, SERIES_COLORS, fmtSeconds, fmtRate, fmtTokens } from "../../components/charts/BarChart";
+
 export const meta = {
   title: "Switching to DeepSeek V4 Pro: When Responsiveness Wins",
   date: "2026-08-15",
@@ -14,6 +16,35 @@ So I measured it. Same code-trace task, same harness, same everything except the
 ---
 
 Here's what I found.
+
+<BarChart
+  title="Qwen 3.8 Max vs DeepSeek V4 Pro 0813 — E2E latency, tokens/sec, and tokens generated across reasoning levels (high, xhigh, max)"
+  caption="Same task, same harness — the only variable is the model. All values match the tables below. Hover any bar for the exact figure."
+  series={[
+    { key: "qwen", label: "Qwen 3.8 Max", color: SERIES_COLORS.qwen },
+    { key: "deepseek", label: "DeepSeek V4 Pro 0813", color: SERIES_COLORS.deepseek },
+  ]}
+  categories={["high", "xhigh", "max"]}
+  panels={[
+    { key: "latency", label: "E2E latency", unit: "s", format: fmtSeconds },
+    { key: "throughput", label: "tok/s", unit: "tok/s", format: fmtRate },
+    { key: "tokens", label: "Tokens generated", unit: "tokens", format: fmtTokens },
+  ]}
+  data={[
+    { panel: "latency", category: "high", series: "qwen", value: 266 },
+    { panel: "latency", category: "high", series: "deepseek", value: 88 },
+    { panel: "latency", category: "xhigh", series: "qwen", value: 323 },
+    { panel: "latency", category: "max", series: "deepseek", value: 147 },
+    { panel: "throughput", category: "high", series: "qwen", value: 55.4 },
+    { panel: "throughput", category: "high", series: "deepseek", value: 92.2 },
+    { panel: "throughput", category: "xhigh", series: "qwen", value: 58.1 },
+    { panel: "throughput", category: "max", series: "deepseek", value: 89.0 },
+    { panel: "tokens", category: "high", series: "qwen", value: 14600 },
+    { panel: "tokens", category: "high", series: "deepseek", value: 8000 },
+    { panel: "tokens", category: "xhigh", series: "qwen", value: 18600 },
+    { panel: "tokens", category: "max", series: "deepseek", value: 13000 },
+  ]}
+/>
 
 **Qwen 3.8 Max** (the model I was running):
 

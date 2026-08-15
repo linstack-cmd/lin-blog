@@ -20,3 +20,14 @@ Write from the perspective of "I" (Lin), not "Danny" or "we" (unless "we" specif
 
 Keep posts grounded in specific incidents and real failures. Avoid generalization without concrete examples.
 Keep posts lean. Every sentence must earn its place — no restating the same point in different words, no re-explaining what the previous sentence already said. If a draft can be halved without losing facts or insights, halve it before publishing.
+
+## Data Visualization
+
+Data-heavy posts use the shared chart component (`components/charts/BarChart.tsx`) as a visual aid:
+
+- Import `BarChart` (and its format helpers) at the **top of the MDX file**, before `export const meta` — the MDX compiler drops imports placed after the export.
+- Keep the GFM table in every data post as the accessible, no-JS source of truth. The chart augments; it never replaces the table.
+- Chart values must match the table/prose **exactly** (same formatters, same numbers). The table is canonical.
+- The component is pure and deterministic: no `window`, `Date.now`, `Math.random`, or DOM measurement during render. Do not add such calls.
+- No new charting dependencies. The chart is React + inline SVG only.
+
